@@ -1,0 +1,1471 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Qoder BYOK 控制台</title>
+<link rel="stylesheet" href="/fonts/fira.css">
+<style>
+  /* ================= token ================= */
+  :root {
+    --bg: #0F172A;
+    --surface: #1B2336;
+    --surface2: #222C42;
+    --border: #334155;
+    --border-strong: #475569;
+    --fg: #F8FAFC;
+    --fg-dim: #CBD5E1;
+    --fg-muted: #94A3B8;
+    --accent: #22C55E;
+    --accent-dim: #16A34A;
+    --accent-soft: rgba(34, 197, 94, .12);
+    --danger: #EF4444;
+    --danger-soft: rgba(239, 68, 68, .12);
+    --warn-soft: rgba(245, 158, 11, .12);
+    --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+    --sp-5: 20px; --sp-6: 24px; --sp-7: 32px; --sp-8: 40px;
+    --r-sm: 6px; --r-md: 8px; --r-lg: 12px;
+    --fs-xs: 11px; --fs-sm: 12.5px; --fs-base: 14px; --fs-md: 16px; --fs-lg: 20px;
+    --font-sans: "IBM Plex Sans", "Fira Sans", system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, Consolas, "Courier New", monospace;
+    --dur: 160ms;
+    --ease: cubic-bezier(.2, .7, .3, 1);
+    /* 兼容旧别名 */
+    --muted: var(--fg-muted); --bad: var(--danger); --ok: var(--accent);
+    --text: var(--fg); --line: var(--border); --panel: var(--surface);
+    --fs-12: var(--fs-xs);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; overflow-x: hidden; max-width: 100vw; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 400 var(--fs-base)/1.55 var(--font-sans);
+    -webkit-font-smoothing: antialiased; letter-spacing: .15px;
+  }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
+
+  /* ================= 顶部 ================= */
+  .topbar {
+    position: sticky; top: 0; z-index: 30;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: var(--sp-4); padding: var(--sp-3) var(--sp-6);
+    background: var(--bg); border-bottom: 1px solid var(--border);
+  }
+  .brand { display: flex; align-items: center; gap: var(--sp-3); }
+  .brand-mark {
+    width: 34px; height: 34px; border-radius: var(--r-md);
+    background: var(--accent-soft); border: 1px solid rgba(34,197,94,.25);
+    display: grid; place-items: center; color: var(--accent); flex: none;
+  }
+  .brand h1 { margin: 0; font-size: 15px; font-weight: 600; }
+  .brand p { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--fg-muted); }
+  .topbar-status { display: flex; gap: var(--sp-2); flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
+
+  /* ================= 布局 ================= */
+  .app { max-width: 1320px; margin: 0 auto; padding: var(--sp-5) var(--sp-6) var(--sp-8); }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r-lg); padding: var(--sp-5);
+    overflow: hidden;
+  }
+  .card h2 {
+    margin: 0 0 var(--sp-3); font-size: var(--fs-xs); font-weight: 600;
+    letter-spacing: 1.1px; text-transform: uppercase; color: var(--fg-muted);
+  }
+  .card-head { margin-bottom: var(--sp-3); }
+  .card-head p { margin: 4px 0 0; font-size: var(--fs-sm); color: var(--fg-muted); line-height: 1.55; }
+
+  /* ================= 状态条 ================= */
+  .stat-grid {
+    display: grid; gap: var(--sp-4);
+    grid-template-columns: repeat(4, 1fr);
+    min-width: 0;
+  }
+  .stat-grid .card { padding: var(--sp-4); }
+  .stat-grid .card h2 { margin-bottom: var(--sp-2); }
+
+  /* ================= tabs ================= */
+  .tabs { display: flex; gap: var(--sp-1); margin: var(--sp-5) 0 var(--sp-4); flex-wrap: wrap; }
+  .tab-btn {
+    padding: 8px 16px; border-radius: var(--r-md);
+    border: 1px solid transparent; background: transparent;
+    color: var(--fg-muted); font: 500 var(--fs-sm)/1 var(--font-sans);
+    cursor: pointer;
+    transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+  }
+  .tab-btn:hover { background: var(--surface2); color: var(--fg); }
+  .tab-btn.active { background: var(--accent-soft); color: var(--accent); border-color: rgba(34,197,94,.3); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ================= 工作台两栏 ================= */
+  .workbench {
+    display: grid; gap: var(--sp-5);
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    align-items: start; min-width: 0;
+  }
+  .work-main, .work-side { display: grid; gap: var(--sp-5); align-content: start; min-width: 0; }
+
+  /* ================= 键值行 ================= */
+  .kv {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: var(--sp-3); padding: 5px 0; font-size: var(--fs-base);
+    border-bottom: 1px solid rgba(255,255,255,.04);
+  }
+  .kv:last-child { border-bottom: 0; }
+  .kv span:first-child { color: var(--fg-muted); white-space: nowrap; flex: none; }
+  .kv b {
+    font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 500;
+    color: var(--fg); text-align: right; overflow-wrap: anywhere; min-width: 0; flex: 1 1 auto;
+  }
+
+  /* ================= pill ================= */
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 9px; border-radius: 999px;
+    font-size: var(--fs-xs); font-weight: 500;
+    border: 1px solid var(--border); background: rgba(255,255,255,.035);
+    color: var(--fg-muted); white-space: nowrap;
+  }
+  .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+  .pill.ok { color: var(--accent); border-color: rgba(34,197,94,.3); background: var(--accent-soft); }
+  .pill.bad { color: var(--danger); border-color: rgba(239,68,68,.3); background: var(--danger-soft); }
+  .pill.warn { color: #FCD34D; border-color: rgba(245,158,11,.3); background: var(--warn-soft); }
+
+  /* ================= 表单 ================= */
+  .row { display: grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+  .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  label { font-size: var(--fs-xs); color: var(--fg-muted); font-weight: 500; letter-spacing: .3px; }
+  input, select, textarea {
+    width: 100%; min-height: 38px; padding: 8px 11px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-md);
+    color: var(--fg); font: 400 var(--fs-sm)/1.4 var(--font-mono);
+    transition: border-color var(--dur) var(--ease); max-width: 100%;
+  }
+  input:focus, select:focus { border-color: var(--accent); outline: none; }
+  input::placeholder { color: var(--fg-muted); opacity: .7; }
+  select { cursor: pointer; }
+
+  /* ================= 按钮 ================= */
+  .btns { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); align-items: center; }
+  button {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    min-height: 36px; padding: 8px 14px;
+    background: var(--surface2); color: var(--fg-dim);
+    border: 1px solid var(--border); border-radius: var(--r-md);
+    font: 500 var(--fs-sm)/1 var(--font-sans); cursor: pointer;
+    transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
+  }
+  button:hover { background: var(--border); border-color: var(--border-strong); color: var(--fg); }
+  button:active { transform: translateY(1px); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #06210F; font-weight: 600; }
+  button.primary:hover { background: #4ADE80; border-color: #4ADE80; }
+  button.ghost { background: transparent; border-color: var(--border); color: var(--fg-dim); }
+  button.danger { background: var(--danger-soft); border-color: rgba(239,68,68,.4); color: #FCA5A5; }
+  button.danger:hover { background: rgba(239,68,68,.18); border-color: var(--danger); }
+  button svg { width: 15px; height: 15px; flex: none; }
+
+  /* ================= 上游列表 ================= */
+  .profile-list { display: grid; gap: 8px; }
+  .up-item {
+    display: flex; align-items: center; gap: var(--sp-3);
+    padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: var(--r-md);
+    background: var(--bg); cursor: pointer;
+    min-width: 0; max-width: 100%; overflow: hidden;
+    transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+  }
+  .up-item:hover { border-color: var(--border-strong); background: var(--surface2); }
+  .up-item.active { border-color: rgba(34,197,94,.55); background: var(--accent-soft); }
+  .up-main { flex: 1; min-width: 0; }
+  .up-name { font-size: var(--fs-base); font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .up-meta { margin-top: 2px; font-size: var(--fs-xs); color: var(--fg-muted); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .up-ops { display: flex; gap: 5px; flex: none; }
+  .up-ops button { min-height: 30px; padding: 5px 10px; font-size: var(--fs-xs); }
+  .up-cur { color: var(--accent); border-color: rgba(34,197,94,.4); background: var(--accent-soft); }
+
+  /* ================= 开关条 ================= */
+  .switch-row { display: flex; gap: var(--sp-4); flex-wrap: wrap; align-items: center; }
+  .switch-item {
+    display: flex; align-items: center; gap: var(--sp-3);
+    padding: var(--sp-3) var(--sp-4);
+    border: 1px solid var(--border); border-radius: var(--r-md);
+    background: var(--bg); min-width: 260px; flex: 1;
+  }
+  .switch-item .sw-info { flex: 1; min-width: 0; }
+  .switch-item .sw-name { font-size: var(--fs-base); font-weight: 550; }
+  .switch-item .sw-desc { font-size: var(--fs-xs); color: var(--fg-muted); margin-top: 1px; }
+
+  /* 自绘开关 */
+  .switch {
+    appearance: none; -webkit-appearance: none;
+    width: 42px; height: 22px; border-radius: 999px;
+    background: var(--surface2); border: 1px solid var(--border);
+    cursor: pointer; position: relative; flex: none;
+    transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  }
+  .switch::after {
+    content: ''; position: absolute; top: 1px; left: 1px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--fg-muted);
+    transition: transform var(--dur) var(--ease), background var(--dur) var(--ease);
+  }
+  .switch:checked { background: var(--accent); border-color: var(--accent); }
+  .switch:checked::after { transform: translateX(20px); background: #fff; }
+
+  /* 补丁项表格 */
+  .ptable { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+  .ptable th {
+    text-align: left; padding: 7px 10px; font-weight: 500; color: var(--fg-muted);
+    font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .ptable td { padding: 9px 10px; border-bottom: 1px solid rgba(255,255,255,.05); vertical-align: middle; }
+  .ptable tr:last-child td { border-bottom: 0; }
+  .ptable td b { color: var(--fg); font-weight: 600; }
+  .ptable td .pt-desc { font-size: var(--fs-xs); color: var(--fg-muted); margin-top: 1px; }
+  .ptable input[type="checkbox"] {
+    appearance: none; -webkit-appearance: none;
+    width: 18px; height: 18px; min-height: 0;
+    border: 1.5px solid var(--border-strong); border-radius: 5px;
+    background: rgba(255,255,255,.04); cursor: pointer; display: block;
+    position: relative;
+    transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  }
+  .ptable input[type="checkbox"]:hover { border-color: var(--accent); }
+  .ptable input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+  .ptable input[type="checkbox"]:checked::after {
+    content: ''; position: absolute; inset: 0;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2306210F' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E") center / 13px no-repeat;
+  }
+
+  /* ================= 表格 ================= */
+  .table-wrap {
+    max-height: 380px; overflow: auto; width: 100%;
+    border: 1px solid var(--border); border-radius: var(--r-md);
+  }
+  table { width: 100%; min-width: 520px; border-collapse: separate; border-spacing: 0; font-size: var(--fs-sm); }
+  thead th {
+    position: sticky; top: 0; z-index: 2;
+    text-align: left; padding: 9px 11px;
+    background: var(--surface2); color: var(--fg-muted);
+    font-size: var(--fs-xs); font-weight: 600; letter-spacing: .5px; text-transform: uppercase;
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  tbody td { padding: 8px 11px; border-bottom: 1px solid rgba(255,255,255,.05); }
+  tbody tr:hover { background: rgba(255,255,255,.03); cursor: pointer; }
+  tbody tr.current { background: var(--accent-soft); }
+
+  /* ================= 日志 ================= */
+  #logs {
+    max-height: 300px; overflow: auto; padding: var(--sp-3);
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-md);
+    font: 400 var(--fs-xs)/1.6 var(--font-mono); color: var(--fg-dim);
+    white-space: pre-wrap; word-break: break-all;
+  }
+
+  /* ================= 提示 ================= */
+  .hint { margin: var(--sp-2) 0 0; font-size: var(--fs-xs); color: var(--fg-muted); line-height: 1.55; }
+  .hint.ok { color: var(--accent); }
+  .hint.bad { color: var(--danger); }
+  .msg { margin-top: var(--sp-2); min-height: 18px; font-size: var(--fs-xs); color: var(--fg-muted); }
+  .msg.ok { color: var(--accent); }
+  .msg.bad { color: var(--danger); }
+  code {
+    background: rgba(148,163,184,.14); color: #CBD5E1;
+    padding: 1px 5px; border-radius: 4px;
+    font: 400 .92em var(--font-mono);
+  }
+
+  /* ================= 首次引导 ================= */
+  .setup { border-color: rgba(245,158,11,.4); background: rgba(245,158,11,.06); }
+  .setup h2 { color: #FCD34D; }
+  .flow { display: grid; gap: 6px; margin: var(--sp-3) 0 var(--sp-1); list-style: none; padding: 0; }
+  .flow li { display: flex; align-items: center; gap: var(--sp-3); font-size: var(--fs-sm); color: var(--fg-dim); }
+  .flow .n {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--surface2); border: 1px solid var(--border);
+    display: grid; place-items: center; font-size: var(--fs-xs); color: var(--fg-muted); flex: none;
+  }
+  .flow li b { font-weight: 550; }
+  .flow li em { font-style: normal; color: var(--fg-muted); font-size: var(--fs-xs); margin-left: 2px; }
+  #setupSteps { display: grid; gap: 5px; margin: var(--sp-3) 0 var(--sp-1); font-size: var(--fs-sm); color: var(--fg-dim); }
+  #setupLog {
+    max-height: 180px; overflow: auto; padding: var(--sp-3);
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-md);
+    font: 400 var(--fs-xs)/1.5 var(--font-mono); color: var(--fg-dim);
+    white-space: pre-wrap; word-break: break-all;
+  }
+
+  /* ================= 折叠区 ================= */
+  details.card.advanced > summary {
+    list-style: none; cursor: pointer;
+    display: flex; align-items: center; gap: var(--sp-3);
+    padding: var(--sp-3) 0;
+  }
+  details.card.advanced > summary::-webkit-details-marker { display: none; }
+  details.card.advanced[open] > summary { border-bottom: 1px solid var(--border); margin-bottom: var(--sp-3); }
+  details.card.advanced .chev { width: 15px; height: 15px; color: var(--fg-muted); transition: transform var(--dur) var(--ease); flex: none; }
+  details.card.advanced[open] .chev { transform: rotate(90deg); }
+  .sum-title { font-size: var(--fs-sm); font-weight: 600; color: var(--fg); }
+  .sum-meta { margin-left: auto; font-size: var(--fs-xs); color: var(--fg-muted); font-family: var(--font-mono); text-align: right; }
+
+  /* ================= FAQ ================= */
+  .faq { display: grid; gap: var(--sp-3); }
+  .faq-item {
+    border: 1px solid var(--border); border-radius: var(--r-md);
+    padding: var(--sp-3) var(--sp-4);
+  }
+  .faq-item h4 { margin: 0 0 5px; font-size: var(--fs-sm); font-weight: 600; color: var(--fg); }
+  .faq-item p { margin: 0; font-size: var(--fs-xs); color: var(--fg-muted); line-height: 1.65; }
+
+  /* ================= 动画 ================= */
+  .kv b.upd { animation: kvUpd 380ms var(--ease); }
+  @keyframes kvUpd {
+    from { opacity: 0; transform: translateY(3px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ================= 响应式 ================= */
+  @media (max-width: 1100px) {
+    .workbench { grid-template-columns: 1fr; }
+    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 720px) {
+    .app { padding: var(--sp-4) var(--sp-3) var(--sp-7); }
+    .topbar { padding: var(--sp-3); gap: var(--sp-3); flex-wrap: wrap; }
+    .topbar-status { flex: 1 1 100%; justify-content: flex-start; }
+    .card { padding: var(--sp-4); }
+    .stat-grid { grid-template-columns: 1fr; }
+    .switch-item { min-width: 0; width: 100%; }
+    .tabs { gap: 0; overflow-x: auto; }
+    .tab-btn { white-space: nowrap; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      transition-duration: .01ms !important;
+      animation-duration: .01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+    </span>
+    <div>
+      <h1>Qoder BYOK 控制台</h1>
+      <p>本地模型网关 · 补丁 · 上游管理</p>
+    </div>
+  </div>
+  <div class="topbar-status" id="topStatus" role="status" aria-live="polite"></div>
+</header>
+
+<div class="app">
+
+  <!-- 首次引导（始终顶部，可关闭） -->
+  <section class="card setup" id="setupCard" style="display:none">
+    <div class="card-head">
+      <h2>首次使用 · 自动配置</h2>
+      <p>检测到环境未就绪。点「一键完成」按下面 4 步自动执行；第 2 步要改 Qoder 安装目录，会请求管理员权限。</p>
+    </div>
+    <ol class="flow" id="setupFlow">
+      <li data-step="1" data-state="pending"><span class="n">1</span><div><b>检查环境</b><em>补丁 · 代理 · IDE 指向</em></div></li>
+      <li data-step="2" data-state="pending"><span class="n">2</span><div><b>应用补丁</b><em>改安装目录 · 需 UAC</em></div></li>
+      <li data-step="3" data-state="pending"><span class="n">3</span><div><b>启动并连接</b><em>起本地代理 · 写 http.proxy</em></div></li>
+      <li data-step="4" data-state="pending"><span class="n">4</span><div><b>同步模型</b><em>写进 IDE 模型列表</em></div></li>
+    </ol>
+    <div id="setupSteps"></div>
+    <div class="btns">
+      <button class="primary" id="setupRunBtn" onclick="runSetup()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        一键完成（自动执行）
+      </button>
+      <button class="ghost" onclick="skipSetup()">稍后再说</button>
+    </div>
+    <div class="msg" id="setupMsg"></div>
+    <pre id="setupLog" style="display:none"></pre>
+  </section>
+
+  <!-- 状态概览 -->
+  <section class="stat-grid" id="cards" style="margin-top:var(--sp-5)"></section>
+
+  <!-- tabs -->
+  <div class="tabs" role="tablist">
+    <button class="tab-btn active" role="tab" aria-selected="true" data-tab="config" onclick="switchTab('config')">上游配置</button>
+    <button class="tab-btn" role="tab" aria-selected="false" data-tab="patches" onclick="switchTab('patches')">补丁与开关</button>
+    <button class="tab-btn" role="tab" aria-selected="false" data-tab="models" onclick="switchTab('models')">模型能力</button>
+    <button class="tab-btn" role="tab" aria-selected="false" data-tab="logs" onclick="switchTab('logs')">日志</button>
+    <button class="tab-btn" role="tab" aria-selected="false" data-tab="maint" onclick="switchTab('maint')">维护</button>
+    <button class="tab-btn" role="tab" aria-selected="false" data-tab="faq" onclick="switchTab('faq')">FAQ</button>
+  </div>
+
+  <!-- ================= Tab: 上游配置 ================= -->
+  <div class="tab-panel active" data-panel="config">
+    <div class="workbench">
+      <div class="work-main">
+        <div class="card">
+          <h2>上游列表</h2>
+          <div class="card-head"><p>点任意一行切换；切换后下面的模型列表会按新上游刷新</p></div>
+          <div id="profileList" class="profile-list"><div class="hint">还没有保存的上游配置。</div></div>
+          <div class="btns">
+            <button class="primary" onclick="newUpstream()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              新建上游
+            </button>
+          </div>
+          <div class="msg" id="profMsg"></div>
+        </div>
+
+        <div class="card">
+          <h2>上游详情</h2>
+          <div class="card-head"><p>选中上游后在这里改；保存会写回列表并立即生效</p></div>
+          <div class="row">
+            <div class="field"><label for="profName">名称</label><input id="profName" placeholder="例如 本地网关"></div>
+            <div class="field"><label for="baseUrl">Base URL</label><input id="baseUrl" placeholder="http://127.0.0.1:3425/v1"></div>
+            <div class="field"><label for="apiKey">API Key</label><input id="apiKey" placeholder="sk-..."></div>
+            <div class="field"><label for="model">模型</label><select id="model"></select></div>
+            <div class="field"><label for="displayName">界面显示名</label><input id="displayName" placeholder="GLM-5.3"></div>
+            <div class="field"><label for="reasoningEffort">思考等级</label><select id="reasoningEffort"></select></div>
+            <div class="field"><label for="maxTokens">输出上限 max_tokens</label><input id="maxTokens" type="number" min="0" placeholder="8192"></div>
+            <div class="field"><label for="contextLength">上下文长度</label><input id="contextLength" type="number" min="0" placeholder="留空跟随网关"></div>
+            <div class="field"><label for="temperature">temperature</label><input id="temperature" type="number" step="0.1" placeholder="留空不发送"></div>
+            <div class="field"><label for="topP">top_p</label><input id="topP" type="number" step="0.05" placeholder="留空不发送"></div>
+            <div class="field"><label for="recordId">模型记录 ID</label><input id="recordId" placeholder="model_mocktest"></div>
+            <div class="field"><label for="proxyPort">代理端口</label><input id="proxyPort" type="number" min="1" max="65535" placeholder="8788"></div>
+            <div class="field"><label for="injectTools">工具补全</label>
+              <select id="injectTools">
+                <option value="true">开启（补 Write/Bash 等）</option>
+                <option value="false">关闭</option>
+              </select>
+            </div>
+            <div class="field"><label for="serveWiki">RepoWiki 接管</label>
+              <select id="serveWiki" onchange="onServeWikiChange()">
+                <option value="true">开启（用自定义模型生成）</option>
+                <option value="false">关闭（走官方）</option>
+              </select>
+            </div>
+          </div>
+          <p class="hint" id="serveWikiHint">RepoWiki 生成时会大量调用模型。开启后用自定义模型跑；关闭则走官方（失败重试时不会白耗你的上游额度）。</p>
+          <div class="btns">
+            <button class="primary" onclick="saveProfile()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+              保存到列表并生效
+            </button>
+            <button onclick="loadModels()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              刷新网关模型
+            </button>
+            <button onclick="testUpstream()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+              测试连通性
+            </button>
+            <button onclick="syncOnly()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+              仅同步记录
+            </button>
+          </div>
+          <div class="msg" id="cfgMsg"></div>
+        </div>
+      </div>
+
+      <aside class="work-side">
+        <div class="card">
+          <h2>快捷操作</h2>
+          <div class="card-head"><p>IDE 代理指向，改完立即生效；退出前会先恢复官方模型</p></div>
+          <div class="btns" style="margin-top:0">
+            <button onclick="ideProxy((STATUS && STATUS.proxy && STATUS.proxy.port) || 8788)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><polyline points="12 5 19 12 12 19"/></svg>
+              走代理
+            </button>
+            <button onclick="ideProxy(null)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 10.6a2 2 0 0 1 2.8 2.8"/><path d="M9 5h6a2 2 0 0 1 2 2v6"/><path d="M5 9v6a2 2 0 0 0 2 2h6"/></svg>
+              恢复
+            </button>
+            <button class="danger" onclick="shutdownService()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+              退出服务
+            </button>
+          </div>
+          <div class="msg" id="opMsg"></div>
+        </div>
+
+        <div class="card">
+          <h2>快捷设置</h2>
+          <div class="row" style="grid-template-columns:1fr">
+            <div class="field"><label for="quickModel">当前模型</label><select id="quickModel" onchange="quickSwitchModel(this.value)"></select></div>
+          </div>
+          <p class="hint">切换模型会自动同步显示名、输出上限与思考等级。</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- ================= Tab: 补丁与开关 ================= -->
+  <div class="tab-panel" data-panel="patches">
+    <div class="workbench">
+      <div class="work-main">
+        <div class="card">
+          <h2>功能开关</h2>
+          <div class="switch-row">
+            <div class="switch-item">
+              <input type="checkbox" class="switch" id="expertsSwitch" onchange="onPatchToggle(this)" data-patch="experts">
+              <div class="sw-info">
+                <div class="sw-name">专家团</div>
+                <div class="sw-desc">专家团使用第三方模型（含解锁与模型列表）</div>
+              </div>
+            </div>
+            <div class="switch-item">
+              <input type="checkbox" class="switch" id="repowikiSwitch" onchange="onPatchToggle(this)" data-patch="repowiki">
+              <div class="sw-info">
+                <div class="sw-name">RepoWiki</div>
+                <div class="sw-desc">解锁 RepoWiki 生成（关掉可省上游额度）</div>
+              </div>
+            </div>
+          </div>
+          <p class="hint">开关只决定「下次应用补丁时写不写这条」；要立刻生效请点「应用全部补丁」。</p>
+        </div>
+
+        <div class="card">
+          <h2>补丁项</h2>
+          <div class="card-head"><p>每条补丁的启用状态与当前 bundle 是否已应用</p></div>
+          <table class="ptable">
+            <thead><tr><th style="width:70px">启用</th><th>补丁</th><th style="width:120px">当前状态</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><input type="checkbox" data-patch="experts" onchange="onPatchToggle(this)"></td>
+                <td><b>experts · 专家团</b><div class="pt-desc">专家团使用第三方模型（含解锁与模型列表）</div></td>
+                <td><span class="pill ok"><span class="dot"></span>已应用</span></td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" data-patch="repowiki" onchange="onPatchToggle(this)"></td>
+                <td><b>repowiki · RepoWiki</b><div class="pt-desc">解锁 RepoWiki 生成（关掉可省上游额度）</div></td>
+                <td><span class="pill ok"><span class="dot"></span>已应用</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <aside class="work-side">
+        <div class="card">
+          <h2>自动更新</h2>
+          <div class="field">
+            <label for="autoUpdate">Qoder 自动更新</label>
+            <select id="autoUpdate" onchange="onAutoUpdateChange()">
+              <option value="false">已关闭（推荐）</option>
+              <option value="true">开启（会清补丁）</option>
+            </select>
+          </div>
+          <p class="hint" id="autoUpdateHint">Qoder 更新会覆盖 bundle，把我们打的补丁全部还原。保持关闭；「全部回滚」会重新打开它。</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- ================= Tab: 模型能力 ================= -->
+  <div class="tab-panel" data-panel="models">
+    <div class="card">
+      <h2>网关模型能力</h2>
+      <div class="card-head"><p>点任意一行切换；点击会写回当前上游</p></div>
+      <div class="row" style="margin-bottom:var(--sp-3)">
+        <div class="field"><label for="modelQ">搜索</label><input id="modelQ" placeholder="过滤模型名" oninput="renderModels()"></div>
+        <div class="field"><label for="modelSort">排序</label>
+          <select id="modelSort" onchange="renderModels()">
+            <option value="">默认</option>
+            <option value="name">按模型名</option>
+            <option value="context">按上下文长度</option>
+            <option value="output">按输出上限</option>
+          </select>
+        </div>
+      </div>
+      <div class="hint" id="modelWarn"></div>
+      <div class="table-wrap" style="margin-top:var(--sp-3)">
+        <table>
+          <thead><tr>
+            <th>模型名</th><th>上下文长度</th><th>输出上限</th><th>思考档位</th><th>图片</th>
+          </tr></thead>
+          <tbody id="modelRows"><tr><td colspan="5" style="color:var(--fg-muted)">加载中…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Tab: 日志 ================= -->
+  <div class="tab-panel" data-panel="logs">
+    <div class="card">
+      <h2>日志</h2>
+      <div class="row" style="margin-bottom:var(--sp-3)">
+        <div class="field"><label for="logSrc">来源</label>
+          <select id="logSrc" onchange="loadLogs()">
+            <option value="proxy">代理</option>
+            <option value="agent">agent</option>
+            <option value="renderer">渲染</option>
+            <option value="all">全部</option>
+          </select>
+        </div>
+        <div class="field"><label for="logQ">关键字过滤</label><input id="logQ" placeholder="例如 custom-serve" oninput="loadLogs()"></div>
+        <div class="field"><label for="logN">行数</label><input id="logN" type="number" value="120" min="10" max="500" style="min-width:80px"></div>
+        <div class="field"><label>自动刷新</label>
+          <label style="display:flex;align-items:center;gap:8px;min-height:38px;cursor:pointer">
+            <input type="checkbox" id="logAuto" class="switch" onchange="toggleAutoLog()">
+            <span style="font-size:var(--fs-xs);color:var(--fg-muted)">3 秒</span>
+          </label>
+        </div>
+      </div>
+      <div class="btns" style="margin-top:0;margin-bottom:var(--sp-3)">
+        <button onclick="loadLogs()">刷新</button>
+        <button onclick="clearLogs()">清空</button>
+      </div>
+      <div id="logs">（暂无日志）</div>
+    </div>
+  </div>
+
+  <!-- ================= Tab: 维护 ================= -->
+  <div class="tab-panel" data-panel="maint">
+    <div class="workbench">
+      <div class="work-main">
+        <div class="card">
+          <h2>维护操作</h2>
+          <div class="card-head"><p>导出/导入配置、应用补丁、全部回滚、重新运行引导</p></div>
+          <div class="btns" style="margin-top:0">
+            <button onclick="exportCfg()">导出配置</button>
+            <button onclick="document.getElementById('importFile').click()">导入配置</button>
+            <input type="file" id="importFile" accept="application/json" style="display:none" onchange="importCfg(this)">
+            <button class="primary" onclick="applyAll()">应用全部补丁</button>
+            <button class="danger" onclick="revertAll()">全部回滚</button>
+            <button onclick="rerunSetup()">重新运行首次引导</button>
+          </div>
+          <div class="msg" id="maintMsg"></div>
+        </div>
+      </div>
+      <aside class="work-side">
+        <div class="card">
+          <h2>维护说明</h2>
+          <p class="hint">回滚会把 bundle 还原成官方版本，清空 BYOK 记录，摘掉代理，并重开自动更新。回滚后需：关自动更新 → IDE 走代理 → 应用全部补丁 → 重启 Qoder IDE。</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- ================= Tab: FAQ ================= -->
+  <div class="tab-panel" data-panel="faq">
+    <div class="card">
+      <h2>常见问题 · 注意事项</h2>
+      <div class="faq">
+        <div class="faq-item">
+          <h4>Qoder 更新会冲掉补丁吗</h4>
+          <p>会。Qoder 更新覆盖 bundle，补丁全部还原，<code>.bak-*</code> 备份也会被清掉。表现：模型名不对 / 专家团选不到自定义模型 / RepoWiki 又提示「无法生成」。修复：到「维护」点<b>应用全部补丁</b>，或跑 <code>experts-patch.js --quest</code>，然后重启 Qoder。</p>
+        </div>
+        <div class="faq-item">
+          <h4>关闭自动更新为什么没用</h4>
+          <p>Qoder 每次启动都会把 <code>app.configAdvancedAutoUpdate</code> 重置为 <code>true</code>，这是 Qoder 的自我保护，设置关不掉。真正的防线是发现症状后重打补丁。</p>
+        </div>
+        <div class="faq-item">
+          <h4>同一时刻只能有一个模型在线</h4>
+          <p>Qoder 的模型记录里<b>只有一条</b>自定义模型（默认 <code>model_mocktest</code>），所以同一时刻只有<b>一个</b>自定义模型在 IDE 里生效。控制台里可以存多套上游配置，但切换时会覆盖这条记录。</p>
+        </div>
+        <div class="faq-item">
+          <h4>工具补全</h4>
+          <p>你的模型不支持原生工具调用（<code>tool_calls</code>）时，代理会注入 Write/Bash/DeleteFile 等 5 个工具的系统提示，让模型用纯文本调用工具。已在 MiniMax/GLM/MiMo 上验证。</p>
+        </div>
+        <div class="faq-item">
+          <h4>退出服务后 Qoder 还能正常用吗</h4>
+          <p>能。退出服务会<b>完整恢复官方状态</b>：先清空 BYOK 模型记录、把各场景模型切回官方值，再去掉 <code>http.proxy</code>，最后才停本地代理并关闭控制台。下次要用第三方模型，重启控制台后点<b>「走代理」</b>即可。</p>
+        </div>
+        <div class="faq-item">
+          <h4>「全部回滚」之后要做什么</h4>
+          <p>回滚会重开自动更新。所以顺序是：关自动更新 → IDE 走代理 → 应用全部补丁 → 重启 Qoder IDE。</p>
+        </div>
+        <div class="faq-item">
+          <h4>上游排队（queue.full / queue.waiting）</h4>
+          <p>这是网关侧排队，不是故障。等一会儿自动放行，或在「上游详情」里换一个模型（不同模型队列独立）。</p>
+        </div>
+        <div class="faq-item">
+          <h4>llm_return_empty 是什么</h4>
+          <p>上游返回 JSON 错误、没有 SSE <code>data:</code> 行时，Qoder 会显示 <code>llm_return_empty</code>，完全看不出原因。代理已按四类映射（auth_error / rate_limited / content_policy_rejected / upstream_transient_error）。</p>
+        </div>
+        <div class="faq-item">
+          <h4>数字显示异常</h4>
+          <p>MiniMax 2.5 有时把工具返回的 JSON 数字切成科学计数法。上游模型行为问题，我们把值原样转发，不做改写。</p>
+        </div>
+        <div class="faq-item">
+          <h4>进程为什么有时退出</h4>
+          <p>曾观察到管理/代理进程偶发退出（原因未明）。遇到界面连不上时，重新点「IDE 走代理」即可拉起。</p>
+        </div>
+        <div class="faq-item">
+          <h4>网关模型能力不准怎么办</h4>
+          <p>保存上游时会自动同步模型记录（显示名、上下文、VL、思考等级）。若网关上报不准，可在「上游详情」的<b>上下文长度</b>里手动填，它会覆盖记录里的 <code>max_input_tokens</code>。模型记录只有 ID + 显示名 + 能力位三样，不要加别的字段，Qoder 会拒收。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// Tab 切换
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === name);
+    b.setAttribute('aria-selected', b.dataset.tab === name);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => {
+    p.classList.toggle('active', p.dataset.panel === name);
+  });
+}
+
+
+// Tab 切换
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === name);
+    b.setAttribute('aria-selected', b.dataset.tab === name);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => {
+    p.classList.toggle('active', p.dataset.panel === name);
+  });
+}
+
+
+
+const $ = (id) => document.getElementById(id);
+let STATUS = null;
+
+function pill(ok, text) {
+  return `<span class="pill ${ok ? 'ok' : 'bad'}"><i class="dot"></i>${text}</span>`;
+}
+function fmt(n) { return n ? Number(n).toLocaleString() : '—'; }
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  return r.json();
+}
+function msg(el, text, ok) {
+  const e = $(el); e.textContent = text; e.className = 'msg ' + (ok === true ? 'ok' : ok === false ? 'bad' : '');
+}
+
+let _prevSnapshot = '';
+function animateValueChanges() {
+  // 对比前后快照，值变化的 kv 数值加动画类
+  const snap = [];
+  document.querySelectorAll('#cards .kv').forEach((kv) => {
+    const label = (kv.querySelector('span') || {}).textContent || '';
+    const val = (kv.querySelector('b') || {}).textContent || '';
+    snap.push(label + '=' + val);
+  });
+  const cur = snap.join('|');
+  if (_prevSnapshot) {
+    const prev = _prevSnapshot.split('|');
+    snap.forEach((s, i) => {
+      if (prev[i] !== s) {
+        const kv = document.querySelectorAll('#cards .kv')[i];
+        const b = kv && kv.querySelector('b');
+        if (b) { b.classList.remove('upd'); void b.offsetWidth; b.classList.add('upd'); }
+      }
+    });
+  }
+  _prevSnapshot = cur;
+}
+async function loadStatus() {
+  STATUS = await api('/api/status');
+  const p = STATUS.patches, c = STATUS.config.upstream || {};
+  $('cards').innerHTML = `
+    <div class="card"><h2>本地代理</h2>
+      <div class="kv"><span>127.0.0.1:${STATUS.proxy.port}</span>${pill(STATUS.proxy.running, STATUS.proxy.running ? '运行中' : '未运行')}</div>
+      <div class="kv"><span>当前模型</span><b>${c.displayName || c.model || '—'}</b></div>
+      <div class="kv"><span>思考等级</span><b>${c.reasoningEffort || '未指定'}</b></div>
+    </div>
+    <div class="card"><h2>Qoder IDE</h2>
+      <div class="kv"><span>http.proxy</span><b>${STATUS.ide.httpProxy || '未设置'}</b></div>
+
+    </div>
+    <div class="card"><h2>补丁</h2>
+      <div class="kv"><span>BYOK 解锁</span>${pill(p.byok, p.byok ? '已应用' : '缺失')}</div>
+      <div class="kv"><span>实时模型名</span>${pill(p.live, p.live ? '已应用' : '缺失')}</div>
+      <div class="kv"><span>状态同步</span><b style="font-weight:300;color:#93A2B8">${new Date().toLocaleTimeString('zh-CN', { hour12: false })} 自动刷新</b></div>
+    </div>
+`;
+
+  animateValueChanges();
+
+  const up = STATUS.config.upstream || {};
+  if (document.activeElement === document.body || !document.querySelector('input:focus')) {
+    $('baseUrl').value = up.baseUrl || '';
+    $('apiKey').value = up.apiKey || '';
+    $('displayName').value = up.displayName || '';
+    $('reasoningEffort').value = up.reasoningEffort || '';
+    $('maxTokens').value = up.maxTokens ?? '';
+    $('contextLength').value = up.contextLength ?? '';
+    if ($('profName') && document.activeElement !== $('profName')) $('profName').value = STATUS.config.activeProfile || '';
+    $('temperature').value = up.temperature ?? '';
+    $('topP').value = up.topP ?? '';
+    $('recordId').value = STATUS.config.recordId || 'model_mocktest';
+    $('injectTools').value = STATUS.config.injectTools === false ? 'false' : 'true';
+    $('serveWiki').value = STATUS.config.serveWiki === false ? 'false' : 'true';
+    $('autoUpdate').value = STATUS.ide.autoUpdate.settings === false ? 'false' : 'true';
+    $('proxyPort').value = STATUS.config.proxyPort || STATUS.proxy.port || '';
+  }
+  if (STATUS.record && STATUS.record[0]) {
+  }
+  renderSetup(STATUS);
+}
+
+let setupAutoStarted = false;
+let setupForceShow = false;
+function renderSetup(st) {
+  const card = $('setupCard');
+  if (!card) return;
+  const ideP = (st.ide && st.ide.httpProxy) || '';
+  const patched = !!(st.patches && st.patches.byok && st.patches.live);
+  const okProxy = !!(st.proxy && st.proxy.running);
+  const okIde = ideP.includes(':' + (st.proxy && st.proxy.port));
+  const complete = patched && okProxy && okIde;
+
+  // 环境已经完整：收起并打上「已完成」标记，之后不再打扰
+  // （手动点「重新运行首次引导」时用 setupForceShow 强制显示）
+  if (complete && !setupForceShow) {
+    card.style.display = 'none';
+    if (!st.setupDone) api('/api/setup/done', { method: 'POST' }).catch(() => {});
+    return;
+  }
+
+  card.style.display = '';
+
+  $('setupSteps').innerHTML =
+    `<p class="hint" style="margin:0 0 4px">当前状态：补丁 ${patched ? '已应用' : '缺失'} · 代理 ${okProxy ? '运行中' : '未启动'} · IDE ${ideP || '未设置'}</p>`;
+
+  // 第一次打开且补丁还没打 -> 自动跑一遍（只触发一次，避免反复弹 UAC）
+  if (!st.setupDone && !patched && !setupAutoStarted && !setupRunning) {
+    setupAutoStarted = true;
+    setTimeout(() => { if (!setupRunning) runSetup(); }, 900);
+  }
+}
+
+let autoLogTimer = null;
+function toggleAutoLog() {
+  const on = $('logAuto').checked;
+  if (autoLogTimer) { clearInterval(autoLogTimer); autoLogTimer = null; }
+  if (on) { loadLogs(); autoLogTimer = setInterval(loadLogs, 3000); }
+}
+
+// 退出服务：先把 Qoder 恢复成不设代理，再停本地代理，最后关闭控制台
+async function shutdownService() {
+  if (!confirm('退出服务会依次：\n1) 把 IDE 恢复为官方模型（清空 BYOK 记录）\n2) 把 Qoder 恢复为不设代理\n3) 停止本地代理\n4) 关闭本控制台\n\n这样退出后 Qoder 可正常直连官方使用。继续？')) return;
+  const btn = [...document.querySelectorAll('button')].find((b) => /退出服务/.test(b.textContent || ''));
+  if (btn) { btn.disabled = true; btn.textContent = '正在退出…'; }
+  try {
+    const r = await api('/api/shutdown', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
+    });
+    document.body.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-size:14px;color:#93A2B8;text-align:center;line-height:1.9">' +
+      '服务已退出：<br>IDE 已恢复为官方模型，Qoder 不设代理，可正常直连使用。<br>下次要用第三方模型：重启控制台 → 点「IDE 走代理」。</div>';
+  } catch (e) {
+    document.body.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-size:14px;color:#93A2B8">' +
+      '服务已退出（页面无法再连接控制台）。</div>';
+  }
+}
+
+// 单条补丁开关：只改 config.json 的 patches，不马上改 bundle（改 bundle 要点「应用补丁」）
+async function onPatchToggle(el) {
+  const id = el.dataset.patch;
+  const patches = {};
+  patches[id] = el.checked;
+  try {
+    const r = await api('/api/patches', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ patches }),
+    });
+    if (r && r.ok) { await loadStatus(); } else { throw new Error('保存失败'); }
+  } catch (e) {
+    el.checked = !el.checked;   // 回滚勾选
+    alert('保存失败：' + (e && e.message ? e.message : e));
+  }
+}
+
+// Qoder 自动更新开关：更新会覆盖 bundle 冲掉补丁，所以默认应保持关闭。
+async function onAutoUpdateChange() {
+  const hint = $('autoUpdateHint');
+  const off = $('autoUpdate').value === 'false';
+  try {
+    const r = await api('/api/auto-update', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ enabled: !off }),
+    });
+    if (r && r.ok) {
+      hint.className = 'hint ok';
+      hint.textContent = off
+        ? '已关闭：Qoder 不会再自动更新，补丁不会被冲掉。'
+        : '已开启：下次 Qoder 更新会清掉全部补丁，需要重跑 apply-all / experts-patch。';
+      // 操作后立刻同步页面状态
+      await loadStatus();
+    } else { throw new Error('保存失败'); }
+  } catch (e) {
+    hint.className = 'hint bad';
+    hint.textContent = '保存失败：' + (e && e.message ? e.message : e);
+  }
+  setTimeout(() => {
+    hint.className = 'hint';
+    hint.textContent = 'Qoder 更新会覆盖 bundle，把我们打的补丁全部还原。保持关闭；「全部回滚」会重新打开它。';
+  }, 4000);
+}
+
+// RepoWiki 接管开关：切换后立即生效，不需要点「保存」
+async function onServeWikiChange() {
+  const hint = $('serveWikiHint');
+  const on = $('serveWiki').value === 'true';
+  try {
+    const r = await api('/api/config', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ serveWiki: on, sync: false }),
+    });
+    if (r && r.ok) {
+      hint.className = 'hint ok';
+      hint.textContent = on
+        ? '已开启：RepoWiki 生成将使用自定义模型（会消耗上游额度）。'
+        : '已关闭：RepoWiki 走官方，不会消耗你的上游额度。';
+      // 操作后立刻同步页面状态
+      await loadStatus();
+    } else {
+      throw new Error('保存失败');
+    }
+  } catch (e) {
+    hint.className = 'hint bad';
+    hint.textContent = '保存失败：' + (e && e.message ? e.message : e);
+  }
+  setTimeout(() => {
+    hint.className = 'hint';
+    hint.textContent = 'RepoWiki 生成时会大量调用模型。开启后用自定义模型跑；关闭则走官方（失败重试时不会白耗你的上游额度）。';
+  }, 4000);
+}
+
+async function exportCfg() {
+  const r = await api('/api/export');
+  const blob = new Blob([JSON.stringify(r, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `qoder-byok-config-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  msg('maintMsg', '配置已导出', true);
+}
+
+async function importCfg(input) {
+  const f = input.files && input.files[0];
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch { msg('maintMsg', '文件不是合法 JSON', false); input.value = ''; return; }
+  if (!confirm('导入会覆盖当前 config.json（以及 tools-extra.json，如果文件里带）。继续？')) { input.value = ''; return; }
+  const r = await api('/api/import', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data) });
+  msg('maintMsg', r.ok ? '配置已导入，代理下次请求生效' : ('导入失败：' + (r.error || '')), !!r.ok);
+  input.value = '';
+  await loadStatus();
+  await loadModels();
+}
+
+async function runInit() {
+  msg('setupMsg', '正在初始化…');
+  const r = await api('/api/init', { method: 'POST' });
+  if (!r.ok) { msg('setupMsg', '初始化失败：' + (r.error || ''), false); return; }
+  const bad = (r.steps || []).filter((s) => !s.ok);
+  const needAdmin = bad.some((s) => s.step === 'patches' && s.needAdmin);
+  msg('setupMsg', bad.length
+    ? `完成 ${(r.steps || []).length - bad.length} 项${needAdmin ? '；补丁需要管理员，请点「先打补丁」' : ''}`
+    : '初始化完成，重启 IDE 即可', !bad.length);
+  await loadStatus();
+}
+
+let setupRunning = false;
+
+const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function setStep(i, state, note) {
+  const li = document.querySelectorAll('#setupFlow li')[i];
+  if (!li) return;
+  li.dataset.state = state;
+  if (note) { const em = li.querySelector('em'); if (em) em.textContent = note; }
+}
+function setupLogLine(s) {
+  const pre = $('setupLog');
+  if (!pre) return;
+  pre.style.display = 'block';
+  pre.textContent += s + '\n';
+  pre.scrollTop = pre.scrollHeight;
+}
+function skipSetup() {
+  setupForceShow = false;
+  $('setupCard').style.display = 'none';
+}
+
+async function waitApply(maxSec) {
+  const t0 = Date.now();
+  let last = '';
+  while ((Date.now() - t0) / 1000 < maxSec) {
+    await sleepMs(2500);
+    let s;
+    try { s = await api('/api/apply-status'); } catch { continue; }
+    const tail = (s.lines || []).slice(-1)[0] || '';
+    if (tail && tail !== last) { last = tail; setupLogLine('   ' + tail); }
+    if (s.done) return true;
+  }
+  return false;
+}
+
+async function rerunSetup() {
+  await api('/api/setup/reset', { method: 'POST' });
+  setupAutoStarted = false;
+  setupForceShow = true;
+  for (let i = 0; i < 5; i++) setStep(i, 'pending');
+  const log = document.getElementById('setupLog');
+  if (log) { log.textContent = ''; log.style.display = 'none'; }
+  const card = document.getElementById('setupCard');
+  card.style.display = '';
+  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  await loadStatus();
+  msg('maintMsg', '已把首次引导放到页面顶部，点「一键完成」即可重新执行', true);
+}
+
+async function runSetup() {
+  if (setupRunning) return;
+  setupRunning = true;
+  $('setupRunBtn').disabled = true;
+  $('setupLog').textContent = '';
+  for (let i = 0; i < 5; i++) setStep(i, 'pending');
+  const log = (s) => { setupLogLine(s); msg('setupMsg', s); };
+  let failed = false;
+
+  try {
+    // 1 检查环境
+    setStep(0, 'running');
+    let st = await api('/api/status');
+    const patched = !!(st.patches && st.patches.byok && st.patches.live);
+    log('环境：补丁 ' + (patched ? '已应用' : '缺失') + ' · 代理 ' + (st.proxy.running ? '运行中' : '未启动') + ' · IDE ' + (st.ide.httpProxy || '未设置'));
+    setStep(0, 'ok');
+
+    // 2 补丁
+    setStep(1, 'running');
+    if (patched) { setStep(1, 'skip', '已应用，跳过'); log('补丁已存在，跳过'); }
+    else {
+      log('正在请求管理员权限…（UAC 弹窗可能几秒后才出现，请点“是”）');
+      await api('/api/apply', { method: 'POST' });
+      const done = await waitApply(300);
+      if (done) { setStep(1, 'ok', '已完成'); log('补丁应用完成'); }
+      else { setStep(1, 'fail', '未完成'); log('补丁未完成：请确认 UAC 授权后重试'); failed = true; }
+    }
+
+    // 3 启动代理 + 让 IDE 走代理
+    setStep(2, 'running');
+    st = await api('/api/status');
+    if (!st.proxy.running) {
+      await api('/api/proxy', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'start' }) });
+      await sleepMs(2500);
+      st = await api('/api/status');
+    }
+    if (st.proxy.running) {
+      const rp = await api('/api/ide-proxy', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ port: st.proxy.port }) });
+      if (rp.ok) {
+        setStep(2, 'ok', '代理 :' + st.proxy.port + ' · IDE 已指向');
+        log('代理已就绪，IDE http.proxy = ' + rp.httpProxy);
+      } else {
+        setStep(2, 'fail', 'IDE 指向失败');
+        log('设置 IDE 代理失败：' + (rp.error || ''));
+        failed = true;
+      }
+    } else { setStep(2, 'fail', '启动失败'); log('代理启动失败'); failed = true; }
+
+    // 4 同步模型
+    setStep(3, 'running');
+    const sy = await api('/api/sync', { method: 'POST' });
+    const syncOk = !!(sy.sync && sy.sync.code === 0);
+    if (syncOk) { setStep(3, 'ok', '已同步'); log('模型同步成功'); }
+    else { setStep(3, 'fail', '同步失败'); log('模型同步失败：' + ((sy.sync && sy.sync.out) || '').slice(-160)); failed = true; }
+
+    if (!failed) {
+      await api('/api/setup/done', { method: 'POST' });
+      log('全部完成。请重启 Qoder IDE，补丁才会生效。');
+      await loadStatus(); await loadProfiles(); await loadModels();
+      setTimeout(() => { setupForceShow = false; const c = $('setupCard'); if (c) c.style.display = 'none'; }, 6000);
+    } else {
+      msg('setupMsg', '有步骤未完成，按上面提示处理后点「一键完成」重试', false);
+    }
+  } catch (e) {
+    log('出错：' + e.message);
+    msg('setupMsg', '出错：' + e.message, false);
+  } finally {
+    setupRunning = false;
+    $('setupRunBtn').disabled = false;
+  }
+}
+
+let PROFILE_LIST = [];
+
+function renderProfiles() {
+  const box = $('profileList');
+  if (!box) return;
+  if (!PROFILE_LIST.length) {
+    box.innerHTML = '<div class="hint">还没有保存的上游配置。填好下面的表单后点「保存到列表并生效」。</div>';
+    return;
+  }
+  box.innerHTML = PROFILE_LIST.map((p) => `
+    <div class="up-item${p.active ? ' active' : ''}" onclick="applyProfile('${p.name}')">
+      <div class="up-main">
+        <div class="up-name">${p.name}${p.active ? ' <span class="tag up-cur">当前</span>' : ''}</div>
+        <div class="up-meta">${p.baseUrl || '（未填地址）'} · ${p.model || '未选模型'}</div>
+      </div>
+      <div class="up-ops" onclick="event.stopPropagation()">
+        <button class="ghost" onclick="editProfile('${p.name}')">编辑</button>
+        <button class="ghost danger-text" onclick="deleteProfile('${p.name}')">删除</button>
+      </div>
+    </div>`).join('');
+}
+
+async function loadProfiles() {
+  const r = await api('/api/profiles');
+  PROFILE_LIST = r.list || [];
+  renderProfiles();
+}
+
+function editProfile(name) {
+  const p = PROFILE_LIST.find((x) => x.name === name);
+  if (!p) return;
+  $('profName').value = p.name;
+  $('baseUrl').value = p.baseUrl || '';
+  $('apiKey').value = p.apiKeySet ? '••••••••' : '';
+  $('apiKey').dataset.masked = p.apiKeySet ? '1' : '';
+  if (p.model) { $('model').value = p.model; }
+  $('displayName').value = p.displayName || '';
+  $('reasoningEffort').value = p.reasoningEffort || '';
+  $('maxTokens').value = p.maxTokens ?? '';
+  $('contextLength').value = p.contextLength ?? '';
+  msg('cfgMsg', `已载入「${name}」，改完点「保存到列表并生效」`, true);
+}
+
+function newUpstream() {
+  PROFILE_LIST.forEach(() => {});
+  $('profName').value = '';
+  $('baseUrl').value = 'http://127.0.0.1:3425/v1';
+  $('apiKey').value = '';
+  delete $('apiKey').dataset.masked;
+  $('displayName').value = '';
+  $('maxTokens').value = '';
+  $('contextLength').value = '';
+  msg('cfgMsg', '填好地址和 Key，点「保存到列表并生效」即可新增一套', true);
+}
+
+async function saveProfile() {
+  const name = $('profName').value.trim();
+  if (!name) { msg('cfgMsg', '先给这套上游起个名字', false); return; }
+  msg('cfgMsg', '保存中…');
+  const up = gather();
+  if ($('apiKey').dataset.masked) delete up.apiKey; // keep the stored key
+  const r = await api('/api/profiles/save', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      name, upstream: up,
+      shared: {
+        recordId: $('recordId').value.trim() || undefined,
+        injectTools: $('injectTools').value === 'true',
+        serveWiki: $('serveWiki').value === 'true',
+        proxyPort: $('proxyPort').value ? Number($('proxyPort').value) : undefined,
+      },
+    }),
+  });
+  if (r.ok) {
+    delete $('apiKey').dataset.masked;
+    await loadStatus();
+    await loadProfiles();
+    await loadModels();
+    msg('cfgMsg', `已保存「${name}」并生效，模型列表已按新上游刷新`, true);
+  } else msg('cfgMsg', '保存失败：' + (r.error || ''), false);
+}
+
+async function applyProfile(name) {
+  if (!name) return;
+  msg('profMsg', `正在切换到「${name}」…`);
+  const r = await api('/api/profiles/apply', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }) });
+  if (r.ok) {
+    await loadStatus();
+    await loadProfiles();
+    await loadModels();
+    msg('profMsg', `已切换到「${name}」，模型列表已刷新`, true);
+  } else msg('profMsg', '切换失败：' + (r.error || ''), false);
+}
+
+async function deleteProfile(name) {
+  if (!confirm(`删除上游「${name}」？当前生效的设置不变。`)) return;
+  const r = await api('/api/profiles/delete', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }) });
+  msg('profMsg', r.ok ? `已删除「${name}」` : ('删除失败：' + (r.error || '')), !!r.ok);
+  await loadProfiles();
+}
+
+let MODELS = [];
+async function loadModels() {
+  msg('cfgMsg', '正在读取网关模型…');
+  const r = await api('/api/models');
+  const sel = $('model');
+  const tbody = $('modelRows');
+  if (!r.ok) {
+    msg('cfgMsg', '网关读取失败：' + r.error, false);
+    tbody.innerHTML = `<tr><td colspan="4" style="color:var(--bad)">${r.error}</td></tr>`;
+    return;
+  }
+  MODELS = r.models;
+  const cur = (STATUS?.config?.upstream?.model) || '';
+  sel.onchange = () => { syncFormFromModel(sel.value); checkModelConsistency(); };
+  sel.innerHTML = r.models.map((m) => `<option value="${m.id}" ${m.id === cur ? 'selected' : ''}>${m.name} — ${m.id}</option>`).join('');
+  const qsel = $('quickModel');
+  if (qsel) {
+    qsel.innerHTML = r.models.map((m) => `<option value="${m.id}" ${m.id === cur ? 'selected' : ''}>${m.name}</option>`).join('');
+    qsel.onchange = () => quickSwitchModel(qsel.value);
+  }
+  renderModels();
+  checkModelConsistency();
+  msg('cfgMsg', `已加载 ${r.models.length} 个模型`, true);
+}
+
+function sortBy(key) {
+  const sel = $('modelSort');
+  sel.value = sel.value === key ? '' : key;
+  renderModels();
+}
+
+function renderModels() {
+  const tbody = $('modelRows');
+  const q = ($('modelQ') ? $('modelQ').value : '').trim().toLowerCase();
+  const sort = $('modelSort') ? $('modelSort').value : '';
+  const cur = (STATUS && STATUS.config && STATUS.config.upstream && STATUS.config.upstream.model) || '';
+  let list = MODELS.slice();
+  if (q) {
+    list = list.filter((m) => {
+      const hay = `${m.id} ${m.name} ${(m.levels || []).join(' ')} ${m.vision ? '图片 image' : ''} ${m.reasoning ? '思考 reasoning' : ''} ${m.tools ? '工具 tools' : ''}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }
+  if (sort === 'ctx') list.sort((a, b) => (b.context || 0) - (a.context || 0));
+  else if (sort === 'out') list.sort((a, b) => (b.output || 0) - (a.output || 0));
+  else if (sort === 'name') list.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  if (!list.length) { tbody.innerHTML = '<tr><td colspan="4" style="color:var(--muted)">没有匹配的模型</td></tr>'; return; }
+  tbody.innerHTML = list.map((m) => `
+    <tr onclick="pickModel('${m.id}','${(m.name || '').replace(/'/g, '')}')"${m.id === cur ? ' style="background:#1d2530"' : ''}>
+      <td><b>${m.name}</b>${m.id === cur ? ' <span class="tag">当前</span>' : ''}<div style="color:var(--muted);font-size:11px">${m.id}</div></td>
+      <td class="num">${fmt(m.context)}</td>
+      <td class="num">${fmt(m.output)}</td>
+      <td>${m.vision ? '<span class="tag">图片</span>' : ''}${m.reasoning ? '<span class="tag">思考</span>' : ''}${m.tools ? '<span class="tag">工具</span>' : ''}${(m.levels || []).length ? `<span class="tag">${m.levels.join('/')}</span>` : ''}</td>
+    </tr>`).join('');
+}
+
+function syncFormFromModel(id) {
+  const m = MODELS.find((x) => x.id === id);
+  if (!m) return;
+  $('displayName').value = m.name;
+  if (m.output) $('maxTokens').value = m.output;
+  const sel = $('reasoningEffort');
+  if (m.levels && m.levels.length && !m.levels.includes(sel.value)) sel.value = m.levels[0];
+  msg('cfgMsg', `已按 ${m.name} 预填：上下文 ${fmt(m.context)} · 输出 ${fmt(m.output)}${m.vision ? ' · 图片' : ''} · 档位 ${(m.levels || []).join('/') || '无'}`, true);
+}
+
+// model 与 displayName 是两个独立字段，可能被改得不一致（界面显示 A、实际请求发 B）。
+// 这里把「下拉选中的模型」和「配置里真正生效的模型」摆在一起，不一致时明确告警。
+function checkModelConsistency() {
+  const el = $('modelWarn');
+  if (!el) return;
+  const sel = $('model');
+  const picked = sel ? sel.value : '';
+  const live = (STATUS?.config?.upstream?.model) || '';
+  const liveName = (STATUS?.config?.upstream?.displayName) || '';
+  if (!picked && !live) { el.style.display = 'none'; return; }
+  if (!live || picked === live) {
+    el.style.display = '';
+    el.className = 'hint ok';
+    el.textContent = live ? `实际生效：${live}${liveName && liveName !== live ? `（界面显示「${liveName}」）` : ''}` : '';
+    if (!live) el.style.display = 'none';
+    return;
+  }
+  el.style.display = '';
+  el.className = 'hint bad';
+  el.textContent = `⚠ 不一致：下拉选的是「${picked}」，但配置里真正生效的是「${live}」`
+    + (liveName ? `（界面显示名「${liveName}」）` : '')
+    + '。请求会发给后者——点上方「模型」下拉后立即保存才会生效。';
+}
+
+async function testUpstream() {
+  msg('cfgMsg', '正在测试上游…');
+  const r = await api('/api/test', { method: 'POST' });
+  if (r.ok) msg('cfgMsg', `上游正常（HTTP ${r.status}，${r.ms}ms）`, true);
+  else msg('cfgMsg', `上游异常：${r.error || ('HTTP ' + r.status)}（${r.ms}ms）`, false);
+}
+
+function gather() {
+  const num = (v) => (v === '' || v == null ? undefined : Number(v));
+  return {
+    baseUrl: $('baseUrl').value.trim(),
+    apiKey: $('apiKey').value.trim(),
+    model: $('model').value,
+    displayName: $('displayName').value.trim(),
+    reasoningEffort: $('reasoningEffort').value || undefined,
+    maxTokens: num($('maxTokens').value),
+    contextLength: num($('contextLength').value),
+    temperature: num($('temperature').value),
+    topP: num($('topP').value),
+  };
+}
+
+async function syncOnly() {
+  msg('cfgMsg', '同步中…');
+  const r = await api('/api/sync', { method: 'POST' });
+  msg('cfgMsg', r.ok ? '模型记录已同步' : '同步失败', !!r.ok);
+  await loadStatus();
+}
+
+// 快捷切换模型（在「快捷设置」下拉里）
+async function quickSwitchModel(id) {
+  if (!id) return;
+  const m = MODELS.find((x) => x.id === id);
+  const name = m ? m.name : id;
+  const r = await api('/api/switch-model', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ model: id, displayName: name }),
+  });
+  if (r.ok) {
+    const ch = (r.changed || []).join('，');
+    msg('cfgMsg', `已切换到 ${id}${ch ? `（同步 ${ch}）` : ''}`, true);
+    await loadStatus();
+    const qsel = $('quickModel');
+    if (qsel) qsel.value = id;
+    const sel = $('model');
+    if (sel) sel.value = id;
+    syncFormFromModel(id);
+    checkModelConsistency();
+  } else {
+    msg('cfgMsg', '切换失败：' + (r.error || ''), false);
+  }
+}
+
+async function pickModel(id, name) {
+  msg('cfgMsg', `切换到 ${id} …`);
+  const r = await api('/api/switch-model', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ model: id, displayName: name }),
+  });
+  if (r.ok) {
+    const ch = (r.changed || []).join('，');
+    const m = r.model;
+    const cap = m ? `上下文 ${fmt(m.context)} · 输出 ${fmt(m.output)} ${m.vision ? '· 图片 ' : ''}` : '';
+    msg('cfgMsg', `已切换到 ${id}：${cap}` + (ch ? `（同步 ${ch}）` : ''), true);
+    await loadStatus();
+  }
+  else msg('cfgMsg', '切换失败：' + (r.error || ''), false);
+}
+
+async function proxyAction(action) {
+  if (action === 'stop') {
+    const cur = (STATUS && STATUS.ide && STATUS.ide.httpProxy) || '';
+    if (cur.includes(':8788') && !confirm('IDE 当前指向代理 8788，停止后 IDE 会断网。\n\n继续？')) return;
+  }
+  const r = await api('/api/proxy', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action }),
+  });
+  msg('opMsg', r.ok ? `代理已${action === 'start' ? '启动' : '停止'}（running=${r.running}）` : '操作失败', !!r.ok);
+  await loadStatus();
+}
+
+async function ideProxy(port) {
+  const r = await api('/api/ide-proxy', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ port }),
+  });
+  const target = port === null ? '恢复原始（已删除 http.proxy，不使用任何代理）' : `http.proxy → ${r.httpProxy}`;
+  msg('opMsg', r.ok ? `IDE ${target}（重启 IDE 生效）` : '切换失败：' + (r.error || ''), !!r.ok);
+  await loadStatus();
+}
+
+async function loadLogs() {
+  const src = $('logSrc') ? $('logSrc').value : 'proxy';
+  const q = $('logQ') ? $('logQ').value.trim() : '';
+  const n = $('logN') ? ($('logN').value || 120) : 120;
+  const r = await api(`/api/logs?src=${encodeURIComponent(src)}&q=${encodeURIComponent(q)}&n=${n}`);
+  $('logs').textContent = (r.lines || []).join('\n') || '（暂无日志）';
+}
+
+async function clearLogs() {
+  if (!confirm('清空代理日志文件？')) return;
+  await api('/api/logs/clear', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ src: 'proxy' }) });
+  $('logs').textContent = '（已清空）';
+}
+
+async function applyAll() {
+  if (!confirm('将按顺序重打全部补丁（BYOK / baseUrl / 合并字段 / 实时模型名）并重算校验值，期间会关闭 Qoder。\n\n继续？')) return;
+  const r = await api('/api/apply', { method: 'POST' });
+  if (!r.ok) { msg('maintMsg', '启动失败：' + (r.error || ''), false); return; }
+  msg('maintMsg', r.note || '已启动…');
+  for (let i = 0; i < 40; i++) {
+    await new Promise((res) => setTimeout(res, 3000));
+    const s = await api('/api/apply-status');
+    const last = (s.lines || []).slice(-1)[0] || '' ;
+    msg('maintMsg', `打补丁中… ${last}`);
+    if (s.done) { msg('maintMsg', '补丁已应用，请重启 Qoder IDE。', true); break; }
+  }
+  await loadStatus();
+}
+
+async function revertAll() {
+  if (!confirm('将把 Qoder 恢复到原样：还原原始 bundle、清 CSP 与证书开关、删除 http.proxy、重新打开自动更新。\n\n继续？')) return;
+  const r = await api('/api/revert', { method: 'POST' });
+  if (!r.ok) { msg('maintMsg', '回滚启动失败：' + (r.error || ''), false); return; }
+  msg('maintMsg', r.note || '已启动，请在 UAC 弹窗确认…');
+  for (let i = 0; i < 40; i++) {
+    await new Promise((res) => setTimeout(res, 3000));
+    const s = await api('/api/revert-status');
+    const last = (s.lines || []).slice(-1)[0] || '';
+    msg('maintMsg', `回滚中… ${last}`);
+    if (s.done) { msg('maintMsg', '回滚完成，请重启 Qoder IDE。', true); break; }
+  }
+  await loadStatus();
+}
+
+loadStatus().then(() => { loadModels(); loadProfiles(); });
+
+// 状态实时同步：轮询刷新。
+// 用户正在输入或有焦点在表单里时跳过重建，避免把光标/输入内容冲掉。
+function userBusy() {
+  const a = document.activeElement;
+  if (!a) return false;
+  const tag = (a.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+  return false;
+}
+setInterval(async () => {
+  if (userBusy()) return;           // 正在操作表单，本次不重建
+  try { await loadStatus(); } catch (e) { /* 控制台可能已退出 */ }
+}, 5000);
+
+// ---- header live pills (reuses api()/$() from the block above) ----
+async function refreshTopStatus() {
+  try {
+    const s = await api('/api/status');
+    const ok = (v, t) => `<span class="pill ${v ? 'ok' : 'bad'}"><i class="dot"></i>${t}</span>`;
+    const patched = !!(s.patches && s.patches.byok && s.patches.live);
+    const proxyUp = !!(s.proxy && s.proxy.running);
+    const ideOn = !!(s.ide && s.ide.httpProxy);
+    const portEl = document.getElementById('ideProxyPort');
+    if (portEl && s.proxy && s.proxy.port) portEl.textContent = s.proxy.port;
+    $('topStatus').innerHTML =
+      ok(proxyUp, `代理 ${proxyUp ? '在线' : '离线'}`) +
+      ok(ideOn, `IDE ${ideOn ? '走代理' : '直连'}`) +
+      ok(patched, `补丁 ${patched ? '已应用' : '缺失'}`) +
+      `<span class="pill">${(s.config && s.config.upstream && s.config.upstream.displayName) || '未配置模型'}</span>`;
+  } catch (e) { /* ignore */ }
+}
+refreshTopStatus();
+setInterval(refreshTopStatus, 10000);
+
+
+</script>
+</body>
+</html>

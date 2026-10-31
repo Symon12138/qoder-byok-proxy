@@ -1,0 +1,3 @@
+subjectAltName=DNS:api3.qoder.sh,DNS:*.qoder.sh,DNS:qoder.sh,DNS:center.qoder.sh,DNS:openapi.qoder.sh,DNS:api2.qoder.sh
+extendedKeyUsage=serverAuth
+basicConstraints=CA:FALSE

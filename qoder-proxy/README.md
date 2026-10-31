@@ -1,0 +1,551 @@
+# Qoder IDE 自定义模型代理（任意 OpenAI 兼容端点）
+
+把 Qoder IDE 的自定义模型请求接到你自己的网关，完全绕开 Qoder 服务端的 provider 白名单。
+
+## 架构
+
+```
+Qoder IDE ──http.proxy──> 127.0.0.1:8788 (本代理)
+                              │
+                              ├─ 自定义模型请求 (X-Model-Key: custom_model)
+                              │     → 解包 (zstd + 自定义 Base64) → messages
+                              │     → POST 你的网关 /chat/completions (stream)
+                              │     → 包成 Qoder SSE 信封回给 IDE
+                              │
+                              └─ 其他请求 → 原样隧道到 127.0.0.1:9940 (换号器)
+```
+
+## 配置 `config.json`
+
+```json
+{
+  "upstream": {
+    "baseUrl": "https://你的网关/v1",
+    "apiKey": "sk-...",
+    "model": "你的模型名",
+    "reasoningEffort": "high",
+    "maxTokens": 8192,
+    "temperature": 0.7,
+    "topP": 0.95,
+    "parallelToolCalls": true,
+    "extra": { "任何额外字段": "原样透传给网关" }
+  },
+  "serveCustomModels": true,
+  "customSourceValues": ["custom", "byok"]
+}
+```
+
+- `baseUrl` 支持 `http://` 和 `https://`，必须是 OpenAI 兼容的 `/chat/completions`（SSE 流式）。
+- `reasoningEffort`（可选）：固定思考等级。若 Qoder 请求里自带 `reasoning_effort`，以请求为准。
+- `maxTokens` / `temperature` / `topP` / `parallelToolCalls`（可选）：透传为同名参数。
+- `extra`（可选）：任意对象，原样合并进请求体，用于网关特有参数。
+- 改完**无需重启代理**，下一条消息生效（每次请求都会重读 config）。
+
+## 支持的上游能力
+
+| 能力 | 状态 | 说明 |
+|---|---|---|
+| 文本对话 | ✅ | messages（`contents[].text` → `content`） |
+| 图片输入 | ✅ | `chat_context.imageUrls` → `image_url` 内容块 |
+| 思考等级 | ✅ | 请求里的 `parameters.reasoning_effort`，否则用 config |
+| 思考内容回显 | ✅ | `delta.reasoning_content` 原样透传，IDE 显示「深度思考」 |
+| 输出上限 | ✅ | `config.upstream.maxTokens` → `max_tokens` |
+| 上下文窗口 | ✅ | 模型记录 `max_input_tokens`（用同步脚本写入） |
+| 工具调用 | ✅ 实测通过 | Qoder 用提示词内工具协议（工具描述在 system prompt，模型按约定输出，LS 解析执行），不需要 OpenAI `tools` 数组 |
+| 采样参数 | ✅ | temperature / top_p / parallel_tool_calls / extra |
+
+## 模型记录同步
+
+网关的 `/v1/models` 返回每个模型的 `display_name`、`max_input_tokens`、`max_output_tokens`、`modalities`、`reasoning_levels`、`tool_call`。
+用脚本按当前 `config.upstream.model` 自动写回 Qoder 的模型记录：
+
+```powershell
+pwsh -File E:\Project\AI\dsh\sync-qoder-model.ps1
+```
+
+会更新显示名、上下文窗口、`is_vl`（是否支持图片）、`thinkingConfig`（等级选项）。改完重启 IDE 生效。
+
+## 多模态（图片）
+
+Qoder 不会把图片塞进请求体，而是**上传到自己的 OSS**，在 `chat_context.imageUrls` 里给出预签名 URL。
+
+代理的处理：
+1. 从解包后的 JSON 里取 `imageUrls` 数组；
+2. 把**最后一条 user 消息**的 `content` 从字符串转成数组：`[{type:'text',text}, {type:'image_url', image_url:{url}}...]`；
+3. 转发给网关（网关需能访问该 URL，公网预签名地址，实测可 GET）。
+
+前提：模型记录里 `is_vl: true`，否则 Qoder 不会附带图片。
+
+实测：粘贴一张写着 `MULTIMODAL 42` 的图，问「图里写了什么」，模型正确回答 `MULTIMODAL 42`。
+
+## 工具调用（agent 能力）
+
+Qoder 不使用 OpenAI 的 `tools` / `tool_calls` 协议。工具定义写在 **system prompt** 里，
+模型按约定格式输出调用意图，由 Qoder 的语言服务（`Qoder.exe`）解析并执行，再把结果回填到下一轮消息。
+
+因此代理**不需要**转发 `tools` 数组——实测 payload 里 `tools=0`，agent 仍能正常读写文件。
+实测：让它读 `.gitignore`，界面显示「已查看 .gitignore」「已处理 1 个操作」，返回内容与磁盘一致；
+读不存在的 `pom.xml` 时返回真实的 `The system cannot find the file specified`。
+
+一轮完整的工具调用会产生多次上游请求（messages 数量递增），代理按普通多轮对话处理即可。
+
+## 思考模式
+
+代理不改写上游返回的 chunk，`delta.reasoning_content` 会原样透传，Qoder 会渲染成「深度思考」折叠块。
+
+实测：`wb/cn:deepseek-v4.1-flash` 有思考内容；`mimo-v2.6-pro` / `glm-5.3` / `kimi-k3.1-pro` 不返回。
+
+思考等级目前通过 `config.upstream.reasoningEffort` 固定（Qoder 界面里的等级选择器未打通，不影响使用）。
+
+## 模型显示
+
+Qoder 模型选择器显示的是模型记录里的 `displayName`（存于 `aicoding.customModels`），与 `config.upstream.model` 无关。
+想让界面显示真实模型名，把记录的 `displayName` 改成对应名字即可（设置 → 模型 → 点名称改别名也行）。
+
+## 控制台（推荐入口）
+
+```powershell
+node E:\Project\AI\dsh\qoder-proxy\admin.js
+# 打开 http://127.0.0.1:3426
+```
+
+页面分 8 个视图（侧边栏切换，`Alt+1~8` 直达，`Alt+B` 收起侧边栏）：
+
+- **状态概览**：4 张状态卡（本地代理 / IDE 代理 / 补丁状态 / 当前模型，5 秒自动刷新）、
+  详细信息（代理、Qoder IDE、上游、补丁四组）、快捷操作（IDE 走代理 / 恢复原始 / 切换模型）、
+  模型记录、状态同步。环境不完整时顶部出现 4 步引导卡，点「一键完成」按顺序执行。
+- **上游配置**：左侧已保存的多套上游（点一行即编辑，可「设为当前 / 删除」），
+  右侧表单：名称、BaseURL、APIKey、模型（下拉，末项「手动输入模型 ID」）、显示名、思考等级、
+  输出上限 max_tokens、上下文长度、temperature、top_p；下方「测试连通性 / 刷新网关模型」。
+  「创建并启用」「保存并生效」= 写回列表 + 立即生效 + 同步模型记录。
+- **模型能力**（只读参考）：当前生效模型、上游切换、全部模型列表（搜索 + 能力筛选 + 刷新）。
+  切换模型请到「上游配置」，这里不提供入口。
+- **补丁管理**：bundle 状态（扫描已安装文件判断补丁在不在）、功能开关（专家团 / RepoWiki）、
+  写入 Qoder（应用补丁 / 回滚 / 刷新）、什么时候会失效。
+- **日志**：代理 / Agent / 渲染 / 全部，关键字过滤、行数、刷新、清空。
+- **系统设置**：工具补全、Wiki 用自定义模型、代理端口、模型记录 ID。
+- **维护**：环境状态、导出 / 导入配置、一键修复环境、重启代理、同步模型记录、
+  重新运行引导、退出服务。
+- **帮助**：功能说明、常见问题、快捷键。
+
+**生效时机**（最容易搞错的一块）：
+
+| 改动 | 什么时候生效 | 为什么 |
+|---|---|---|
+| 上游模型 / BaseURL / APIKey / temperature / top_p / maxTokens | 下一条消息 | 代理每次请求重读 `config.json` |
+| 思考等级 / 输出上限 / 上下文长度 / 显示名 / 图片标记 | **重启 Qoder** | 写进 sqlite 模型记录，Qoder 启动时读 |
+| 工具补全 / Wiki 用自定义模型 | 下一条消息 | 代理每请求读配置 |
+| 补丁开关（勾选） | 下次「应用补丁」 | 只决定写不写进 bundle |
+| 应用补丁 / 回滚 | **重启 Qoder** | 改的是 bundle 里的 JS |
+| IDE 走代理 / 恢复原始 | **重启 Qoder** | `http.proxy` 启动时读取并缓存；实测删掉后不重启仍会走代理 |
+| 代理端口 | 需点「重启代理」 | 只写配置，不会自动 rebind 监听 |
+
+**思考等级的实际优先级**：Qoder 界面里选的档位 > 模型记录的 `defaultEffortKey`（由控制台同步）
+> `config.upstream.reasoningEffort`（请求完全没带档位时兜底）。也就是 Qoder 有选择时以 Qoder 为准，
+控制台只负责"新模型的初始默认值"。
+
+**字体**：Fira Sans / Fira Code 的 latin 子集已下载到 `fonts/`（8 个 woff2 + `fira.css`，共 188KB），
+由 `admin.js` 以 `/fonts/*` 提供，页面完全不访问外网。中文回退到系统字体（Fira 不含 CJK）。
+
+`IDE 走代理` 在端口没服务时会自动拉起本代理，避免「先设代理再启动」的死结。
+
+### 状态机：操作与撤销必须对称
+
+只摘代理而留着 BYOK 记录，会留下「Qoder 直连后选中自定义模型发不出去」的坏状态。
+所以每个正向操作都有对应的反向清理：
+
+| 操作 | 做了什么 | 反操作 / 清理 |
+|---|---|---|
+| **IDE 走代理** | 写 `http.proxy` + **同步 BYOK 记录** | **恢复原始**（不设代理） |
+| **应用补丁** | 写 bundle 补丁 + 重算校验值 | **全部回滚**（还原 bundle + 清 BYOK + 摘代理 + 重开自动更新） |
+| **退出服务** | **清 BYOK** → 摘代理 → 停代理 → 关控制台 | 重启控制台 → 点「IDE 走代理」 |
+
+关键实现：`clearByok()`（admin.js）清空 `aicoding.customModels`、
+把 `chat.modelConfig.{assistant,experts,quest}` 切回官方值、清 `chat.modelConfig.session.*`。
+它在**退出服务**和**全部回滚**前调用。
+
+**回滚后要做什么**：回滚会重新打开自动更新。所以顺序是
+关自动更新 → IDE 走代理 → 应用全部补丁 → 重启 Qoder IDE。
+
+**关于多上游**：Qoder 的 `x-model-key` 请求头恒为 `custom_model`，记录 id 从不出现在请求里，
+所以代理无法按 IDE 里的模型记录分流——多上游是「存多套、切一套」，
+切换时重写 config 里的 upstream，IDE 侧不需要任何改动。
+
+**模型记录**由同步脚本自动维护（显示名、上下文、图片、思考档位），控制台不再提供编辑入口；
+上下文长度可在「上游配置」里手动覆盖。
+
+**切换模型做的事**：写 `config.json`（模型、显示名、`maxTokens`=模型输出上限、`reasoningEffort`=当前值或模型支持的第一个档位）
++ 跑 `sync-qoder-model.ps1`（上下文长度、图片、思考能力、档位写入模型记录）。IDE 里显示名 3 秒内自动更新。
+
+### 补丁开关：按功能，不按编号
+
+页面只给 2 个开关，各自控制一组补丁（缺一不可，所以合并）：
+
+| 开关 | 控制的补丁 | 作用 |
+|---|---|---|
+| `experts` | P4 + P2 | 专家团使用第三方模型（解锁门控 + 模型进列表） |
+| `repowiki` | P12 | 解锁 RepoWiki 生成（关掉可省上游额度） |
+
+其余（P1 校验时序、P5a/b/c UI 细节、P6 占位项、P7/P9 合并时机）是内部实现机制，
+**不显示、拒绝修改、始终应用**——关掉只会让功能残缺。
+
+开关存 `config.json` 的 `patches` 字段（值为功能名，如 `{"experts":true,"repowiki":false}`）。
+命令行 `--only=P1,P2` / `--skip=P8` 优先级高于配置文件。
+
+**注意**：勾选只决定「下次应用补丁时写不写这条」，要立刻生效需点**应用全部补丁**。
+
+## 实时模型名
+
+两个改动配合：
+1. `workbench.html` / `agents-window.html` 的 CSP `connect-src` 增加 `http://127.0.0.1:8788`；
+2. `CustomModelService` 构造里加 3 秒轮询 `http://127.0.0.1:8788/state`，把记录 `displayName` 改成当前上游显示名并触发 `onDidChangeModels`。
+
+效果：`config.json` 改 `displayName` → IDE 模型选择器/输入框底部 3 秒内自动变，不用重启。
+
+## 请求体编解码（关键，别再踩坑）
+
+Qoder 的请求体是 **`zstd(自定义编解码(json))`**，自定义编解码不是普通 base64：
+
+```
+1) 标准 base64 编码 JSON          → std
+2) 三段轮转：a = len(std)/3
+   rearranged = std[len-a:] + std[a:len-a] + std[:a]
+3) 逐字符映射到自定义字母表；'=' 映射成 '$'
+```
+
+字母表（64 字符，在 `Qoder.exe` 里也能找到）：
+
+```
+_doRTgHZBKcGVjlvpC,@aFSx#DPuNJme&i*MzLOEn)sUrthbf%Y^w.(kIQyXqWA!
+```
+
+参考实现：[qoder2api `internal/cosy/encoding.go`](https://github.com/Zhengyuuuui/qoder2api/blob/main/internal/cosy/encoding.go)。
+
+**不实现第 2 步会怎样**：解出来像是「从 JSON 中间开始」，开头约 100 字符丢失、messages 数组不闭合。
+之前用「猜字符偏移 + 猜位偏移」硬对齐，最大只能到 99% 可打印且 JSON 解析失败。
+
+**`$` 是填充符**（等价于 `=`），当成未知字符跳过会导致其后全部错位。
+
+## 用户提问在哪（专家团 vs 普通对话）
+
+普通对话的 `messages` 里 user 条目带真实内容；**专家团的 `messages` 里 user 条目 content 全是空串**，
+真正的提问在顶层 `chat_context.text`（`chatPrompt` 字段通常也是空）。
+
+只转发 `messages` 的话，上游会收到一串空消息，模型只能回 `What would you like help with?`。
+代理里的 `fillExpertPrompt()` 负责用 `chat_context.text` 回填最后一条空 user 消息，并清掉其余空消息。
+
+实测效果：专家团一轮对话 `chunks=175 characters=947`，正常返回。
+
+## 代理自测（不需要 IDE）
+
+`E:\Project\AI\dsh\mitm-test.js` —— 用 qoder 编码器构造真实请求，经 HTTP CONNECT 隧道打到本代理，
+直接验证「解码 → 提取 → 转发上游 → SSE 封包」整条链路：
+
+```powershell
+node mitm-test.js --text "只回复：OK"                      # 文本
+node mitm-test.js --text "这图什么颜色？" --image x.b64     # 多模态（纯 base64 文件）
+```
+
+实测（2026-10-30）：文本回复「OK」、纯红图回复「红色」、错误映射 5/5 通过。
+
+## 图片与错误映射
+
+**图片有两个来源**，代理两条都读：
+
+1. `chat_context.imageUrls`（Qoder 把附件传到 OSS，给预签名 HTTPS URL）
+2. `messages[].contents[]` 里的 `{type:"image_url", image_url:{url}}` 部件
+   （官方实现见 [qoder2api `internal/bridge/messages.go`](https://github.com/Zhengyuuuui/qoder2api/blob/main/internal/bridge/messages.go)）
+
+两者都会转成 OpenAI 的 content parts（图片在前、文本在后），随请求发给上游。
+
+## RepoWiki 使用第三方模型
+
+RepoWiki 的生成在 **Go 语言服务（`Qoder.exe`）** 里跑本地 agent，不经过渲染进程发 HTTP。
+渲染层只发 `startWikiGeneration` 给 LS，LS 再走 `agent_chat_generation`
+（`AgentId=deepwiki_generate`，请求体 `session_type:"wiki"`、`task_id:"deepwiki_generate"`）
+——**和专家团、普通对话是同一个拦截点**。
+
+要让 wiki 用自定义模型需要三件事：
+
+1. **P12（`experts-patch.js`）**：把 `fge.shouldShowCommercialMessage` 改成恒 `false`，
+   去掉「你当前的版本无法生成 Repo Wiki + 升级订阅计划」的拦截，生成按钮才会正常渲染。
+   （按钮不会被禁用，配额为 0 时只是文案变成「生成」并请求 Credits）
+2. **代理识别 wiki 任务**：`forward()` 里对 `session_type:"wiki"` 强制走 custom 路径
+3. **别把 wiki 误判成内部任务**：`isInternalTask()` 有一条
+   「`model_config` 为空即内部任务」的规则，而 wiki 的 `model_config` 恰好为空
+   （它不指定模型，走默认 `auto`），会被误判走隧道。已在函数开头排除 wiki。
+
+入口：活动栏（左侧图标栏）的 **Repo Wiki** 图标 → 选语言 → 「生成」；
+中途变 PAUSED 时点「继续」恢复。
+
+**实测状态（2026-10-30，已完整跑通）**：
+
+```
+WIKI_INIT → INITIALIZING → DIRECTORY_GENERATING → DOCUMENT_GENERATING → 完成
+```
+
+| 阶段 | 结果 |
+|---|---|
+| UI 门控（P12） | ✅ 去除，生成按钮可用 |
+| `wiki/queue` / `wiki/finish` | ✅ 全部 200，服务端不拒绝 |
+| 模型接管 | ✅ 100+ 次 `custom-serve`，全走自定义模型 |
+| 目录生成（`deepwiki_catalog_generate`） | ✅ 产出 `meta/repowiki-metadata.json`（约 1MB，52 章节） |
+| 文档生成（`deepwiki_content_generate`） | ✅ 产出 `content/` 下 18 篇 Markdown（约 2.3MB） |
+| 日志错误 | ✅ 无 |
+
+**踩过的四个坑（都已修）**：
+
+1. **被误判成内部任务**：`isInternalTask()` 有「`model_config` 为空即内部任务」的规则，
+   而 wiki 的 `model_config` 恰好为空（它不指定模型，走默认 `auto`），导致走隧道不接管。
+2. **额外工具污染**：wiki 自带 7 个检索工具（`search_codebase`/`list_dir`/`read_file` 等），
+   我们又注入了 Write/Bash 等 5 个，干扰了模型。已改为 wiki 不注入。
+3. **多轮工具调用链断裂**（主因）：`extractMessages()` 原本只取 `content`，丢掉了 assistant 的
+   `tool_calls` 与 tool 结果的 `tool_call_id`/`name`。wiki 目录生成是 20 条消息的多轮工具链，
+   丢了就崩。已保留完整字段。
+4. **排障时自己的采样串扰**：wiki 会并发发多个 `agent_chat_generation`，
+   采样若用全局变量会把多个流的内容混在一起，看着像「模型输出错乱」。已改为按请求隔离。
+
+**开关**：控制台「系统设置」里有 **Wiki 用自定义模型** 开关，切换后立即生效（无需点保存），
+对应 `config.json` 的 `serveWiki`。也可直接编辑配置：
+
+```json
+"serveWiki": false
+```
+
+关闭后 wiki 生成走官方模型（目录/文档阶段失败时会重试并大量调用模型，
+关掉可避免白耗上游额度）。默认开启。
+
+代理侧 `cfgServeWiki()` 每次请求实时读 `config.json`，所以控制台改完无需重启代理。
+
+
+**上游错误映射**：上游返回 JSON 错误时**没有 SSE 的 `data:` 行**，原样转发会让客户端收到空流，
+界面只显示 `llm_return_empty`，完全看不出原因。现在按四类映射（语义参考 qoder2api `errors.go`）：
+
+| 上游状态 | 映射后 code | 含义 |
+|---|---|---|
+| 401 / 403 | `auth_error` | 鉴权失败 |
+| 429 | `rate_limited` | 限流，可稍后重试 |
+| 含审核关键词的 400 | `content_policy_rejected` | 内容审核拒绝，重试无效 |
+| 5xx | `upstream_transient_error` | 临时故障，可重试 |
+| 其他 4xx | `upstream_error` | 带原始状态码与上游 message |
+
+## ⚠️ Qoder 更新会冲掉全部补丁（必读）
+
+Qoder 自动更新时会**覆盖 `out/vs/workbench/*.js` 与 `out/lingma/agents-window/*.js`**，
+所有补丁（P1–P12）被还原成官方原始版本，`.bak-experts-*` 备份也会被清掉。
+
+**表现**：某天突然发现模型名显示不对、专家团选不到自定义模型，或 RepoWiki 又出现
+「你当前的版本无法生成 Repo Wiki + 升级订阅计划」。
+
+**排查**：看 bundle 修改时间是否晚于打补丁的时间：
+
+```powershell
+Get-Item 'D:\Qoder IDE\resources\app\out\vs\workbench\workbench.desktop.main.js' |
+  Select-Object LastWriteTime
+```
+
+**修复**：补丁脚本幂等，重跑即可（会关闭 Qoder，跑完手动重开）：
+
+```powershell
+node E:\Project\AI\dsh\experts-patch.js --dry   # 先看哪些待应用（0 处 = 已应用）
+node E:\Project\AI\dsh\experts-patch.js          # 需要管理员权限
+```
+
+之后必须重跑 `fix-qoder-checksums.ps1`（`apply-all.ps1` 会自动做）。
+
+> **注意**：不要指望「关掉自动更新」来避免——实测 Qoder 每次启动都会把它重置为 `true`
+> （见「自动更新（Qoder 会强制重置，注意）」）。真正的防线是**发现症状后重打补丁**。
+> 当前版本已是最新时（代理日志查到 `1.38.0`，与已安装一致）不会真的更新，补丁是安全的。
+
+## 工具能力边界（实测）
+
+Qoder 当前给模型的工具清单是**只读**的：
+
+```
+SwitchMode, CreatePlan, createGoal, updateGoal, getGoal, CallMcpTool, Glob, Read, SearchCodebase
+```
+
+没有 `Write` / `Edit` / `Bash`。实测：
+- 让 agent 读 `.gitignore` → 成功（`已查看 .gitignore`，内容与磁盘一致）
+- 让 agent 写文件 + 跑终端 → 模型明确回答「没有可用的写操作工具」，磁盘无变化
+
+所以写/终端是 Qoder 的产品门控，代理层补不出来（请求里就没有这些工具定义）。
+
+## 工具补全（Write / Bash / DeleteFile …）
+
+实测发现：Qoder 只在部分轮次下发完整工具表（抓到过 28 个工具，含 `Write`、`Bash`、`GetTerminalOutput`、
+`DeleteFile`），普通提问只给 4–10 个只读工具；而这些写类工具的说明**写在 system prompt 里**，
+模型看得见却没有对应 schema，于是会回答「没有可用的写操作工具」。
+
+代理侧的补法：`tools-extra.json` 里存这几个工具的 schema，转发时按名字合并进 `tools`
+（已存在的跳过，不重复）。开关是 `config.json` 的 `injectTools`（默认 true）。
+
+```json
+{ "injectTools": true }
+```
+
+代理日志会打印 `tools` 和 `tools_injected`，可据此确认是否生效。
+
+**实测通过（Bash）**：
+
+- 代理日志：`tools: 5, tools_injected: 5`
+- 语言服务收到真实调用：`{"command":"echo hello","command_names":["echo"],"cwd":"e:\\Project\\NcbProject\\bte","has_risk":false,"run_mode":"autoReview","timeout":18000}`
+- 终端执行：`exitCode=0`，耗时 104ms，`tool_call_update` 回传
+- 界面显示真实 PowerShell 输出：`PS E:\Project\NcbProject\bte> echo hello` / `hello`
+
+参数名 `command` / `command_names` / `has_risk` / `is_background` 与 `tools-extra.json` 里作者写的 schema 完全一致，
+说明 LS 按名字接受并校验了我们补充的工具定义。
+
+**实测通过（Write）**：让它「在项目根目录创建 _agent_tooltest/hello.txt，内容写 hello-from-agent」，
+磁盘上真实出现该文件（18 字节，内容一致），日志 `applyFileEdit completed` / `status=APPLIED`。
+同一轮里它还先用 Bash 执行了 `New-Item -ItemType Directory -Force -Path ...` 建目录，
+说明写文件和终端两类可以连续调用。
+
+## 工具调用格式归一化
+
+上游返回的 `delta.tool_calls` 如果 `arguments` 是对象（部分模型会这样），Qoder 的解析器会拒收。
+代理在转发每个 chunk 前统一处理：`arguments` 一律转成 JSON 字符串，`type` 缺省补 `function`。
+文本 chunk 不受影响。
+
+## 专家团（已打通）
+
+模型列表来自 `aicoding.modelConfigs.cache.experts`，但 **Qoder 启动时会用服务端的模型表整体覆盖它**
+（日志 `Model classes refreshed`），所以单纯注入存储条目会被冲掉。
+
+关键点：**聊天面板跑在 `workbench.desktop.main.js` 里**，不是 `agents-window` 那个 bundle。
+两个 bundle 都要打补丁，且压缩变量名不同：
+
+| 补丁 | agents-window | workbench |
+|---|---|---|
+| A `refreshModelConfigs` | `dgl` | `Yfl` |
+| B `model/refresh` 通知循环 | `wnt` | `_nt` |
+| C `_persistModelConfigsCache` | `dgl` | `Yfl` |
+| P1 存在性校验 | `Tce` | `Pce` |
+| P4 BYOK 门控 | `HY` | `jY` |
+
+```powershell
+# 都需要管理员
+powershell -ExecutionPolicy Bypass -File E:\Project\AI\dsh\patch-qoder-experts-refresh.ps1
+node E:\Project\AI\dsh\patch-wb-experts.js     # 主 bundle 的 P1/P4/P5
+node E:\Project\AI\dsh\patch-wb-p5b.js         # 主 bundle 的 P5b（3 处）
+```
+
+实测：专家团下拉出现 `deepseek-v4.1-flash`，选中后 `chat.modelConfig.experts = custom:model_mocktest` 落库。
+`cache.experts` 从 6 条变 7 条（合并去重，不重复累积）。
+
+## 启动
+
+```powershell
+# 1. 起代理
+node E:\Project\AI\dsh\qoder-proxy\proxy.js
+
+# 2. 让 IDE 走代理（IDE 设置 → 高级 → 代理 → 手动 → http://127.0.0.1:8788，
+#    或直接改 %APPDATA%\Qoder\User\settings.json 里的 "http.proxy"）
+```
+
+重启 IDE 生效。**代理不运行时 IDE 会断网**，所以停用时应走「退出服务」或「恢复原始（不设代理）」，
+它会正确地把 `http.proxy` 删掉并清掉 BYOK 记录（不要手动改成某个别的地址——早期文档里的 9940
+是已不存在的端口，改过去会直接断网）。
+
+## 证书信任（不用装 CA）
+
+Qoder IDE 支持 `~/.qoder/argv.json`，加一行即可让 IDE 跳过证书校验，**不需要往系统根证书区装 CA**：
+
+```jsonc
+{
+  "ignore-certificate-errors": true
+}
+```
+
+已在本机写入。改完重启 IDE 生效；回滚删掉这一行即可。
+
+## 自动更新（Qoder 会强制重置，注意）
+
+实测结论：**Qoder 每次启动都会把自动更新重新打开**，所以这个设置关不掉：
+
+| 场景 | `app.configAdvancedAutoUpdate` |
+|---|---|
+| Qoder 关闭时通过本工具关闭 | `false` ✅ 写入成功 |
+| 启动 Qoder 之后 | 被重置为 `true` ⚠️ |
+
+也就是说「关闭自动更新」只在 Qoder 关闭期间有效，无法持久生效。这是 Qoder 的自我保护行为。
+
+**应对方式**（已验证）：只要当前版本已是最新（代理日志里查询的是 `1.38.0`，与已安装一致），
+就不会真的下载更新，补丁也不会被冲掉。真正需要担心的是 **Qoder 发布了新版本**——那时它会更新
+并覆盖补丁，症状是：模型名不对 / 专家团选不到自定义模型 / RepoWiki 又提示「无法生成」。
+
+**发现被冲掉后怎么办**：在「高级 · 维护」点**应用全部补丁**，或跑 `experts-patch.js --quest`，然后重启 Qoder。
+详见「⚠️ Qoder 更新会冲掉全部补丁（必读）」。
+
+相关文件：
+
+- `%APPDATA%\Qoder\User\settings.json` → `app.configAdvancedAutoUpdate`
+- `%APPDATA%\Qoder\User\app.json` → `config.advanced.autoUpdate`
+- 备份文件：`*.bak-noautoupdate`
+
+## 补丁清单（experts-patch.js）
+
+移植自 [wqzhellohhwy/qoder-experts-enable](https://github.com/wqzhellohhwy/qoder-experts-enable)，
+并针对本版本做了重构与扩展。**10 条，每条独立生效、互不依赖**（早期的 P8/P10/P11 是对其他补丁产物的
+二次改写，已删除；场景集合改为在生成时就写死）。
+
+| 补丁 | 作用 | 可否关 |
+|---|---|---|
+| P1 | 自定义模型存在性校验恒通过（消除初始化时序竞态） | 否（内部） |
+| P2 | `getAvailableModelConfigs` 在 EXPERTS 通道合并 custom（带 displayName） | 是（随 `experts`） |
+| P4 | 解除专家团模式的 BYOK 门控 | 是（随 `experts`） |
+| P5a/b/c | 专家团下显示 custom 列表 / 标签页 / 真实模型名 | 否（内部） |
+| P6 | 不再产生 id 占位项 | 否（内部） |
+| P7 | 服务端列表刷新后合并 custom（含 const→let，自包含） | 否（内部） |
+| P9 | 构造恢复缓存时合并 custom（自包含） | 否（内部） |
+| P12 | 去掉 RepoWiki「当前版本无法生成」的商业门控 | 是（`repowiki`） |
+
+用法：
+
+```powershell
+node E:\Project\AI\dsh\experts-patch.js --dry            # 只看哪些待应用（0 处 = 已应用）
+node E:\Project\AI\dsh\experts-patch.js --quest          # 应用（场景含 QUEST，供 RepoWiki 用）
+node E:\Project\AI\dsh\experts-patch.js --only=P1,P2     # 只应用指定几条
+node E:\Project\AI\dsh\experts-patch.js --skip=P12       # 跳过指定几条
+```
+
+之后必须重跑 `fix-qoder-checksums.ps1`（`apply-all.ps1` 会自动做）。备份为 `*.bak-experts-*`。
+
+**场景枚举名（如 `un` / `on`）会随 Qoder 版本变化**，脚本从 bundle 动态探测并打印，不要硬编码——
+早期写死 `un.EXPERTS` 曾导致某次更新后合并判断恒为 false、补丁静默失效。
+
+补丁开关在控制台「补丁项」里按功能给出（`experts` / `repowiki`），见上文「补丁开关：按功能，不按编号」。
+
+### 关键坑（实测）
+
+- `chat.modelConfig.experts` **不能手写**——设成任何非 `experts-auto` 的值（含系统自带 `gmodel`）
+  都会让 `workbench.contrib.modelConfig` 崩溃（`t.startsWith is not a function`），界面报 `Something went wrong`。
+  只能由 UI 自己写（或让 `clearByok()` 统一恢复）。
+- `aicoding.modelConfigs.cache.experts` 注入条目会因 schema 不匹配导致
+  `failed to parse cached model configs`，且启动时被服务端覆盖 —— 不要走这条路。正确做法是运行时合并，不碰数据库。
+- 专家团是多角色编排，它发给模型的是规划类提示词；普通对话模型可能按字面回答，
+  出现「正在处理…」卡住或答非所问。链路（选中 → 发请求 → 走代理）是通的，编排行为取决于模型本身。
+
+
+## 已验证链路
+
+- IDE 发出的自定义模型请求：`POST api3.qoder.sh/algo/api/v2/service/pro/sse/agent_chat_generation`
+- 请求头：`X-Model-Key: custom_model`（`X-Model-Source` 为空）
+- 请求体：`zstd` 压缩 + 自定义 Base64（字母表 `_doRTgHZBKcGVjlvpC,@aFSx#DPuNJme&i*MzLOEn)sUrthbf%Y^w.(kIQyXqWA!`）
+- 解出后是 Qoder 的请求 JSON：`messages[].contents[].text` 为正文
+- 回包格式：`data:{"headers":{"Content-Type":["application/json"]},"body":"<OpenAI chunk>","statusCodeValue":200,"statusCode":"OK"}\n\n`
+
+实测：代理把 12 条消息（含完整系统提示）发给本地 mock，mock 返回 `MOCK_OK`，IDE 正常接收并在下一轮把该回复带入历史。
+
+## 已知限制
+
+- **同一时刻只有一个自定义模型在线**：Qoder 的模型记录里只有一条（默认 `model_mocktest`），
+  切换上游会覆盖它。控制台可存多套上游，但不是多个模型并行（见「常见问题」第 9 条）。
+- **代理/控制台进程偶发退出**：遇到界面连不上时，重新点「IDE 走代理」即可拉起。
+- **上游排队**：`queue.full` / `queue.waiting` 是网关侧排队，换模型即可（见「常见问题」第 3 条）。
+- **Qoder 升级会冲掉补丁**：需重跑 `apply-all` 或 `experts-patch`，平时关闭自动更新（见「必读」章节）。
+- **场景枚举名随版本变化**：脚本动态探测，不要硬编码。
+- **代理未做鉴权**，仅监听 127.0.0.1。
+
+已不再是限制（此前记录、现已实现）：图片/多模态（两个来源都转 OpenAI content parts）、
+工具调用（透传 + 补全 + 格式归一化）、多轮工具链（`tool_calls` / `tool_call_id` 完整保留）。

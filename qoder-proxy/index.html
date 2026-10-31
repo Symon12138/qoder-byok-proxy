@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Qoder BYOK 控制台 - 本地模型网关管理">
+  <title>Qoder BYOK 控制台</title>
+  
+  <!-- 字体 -->
+  <link rel="stylesheet" href="/fonts/fira.css">
+  
+  <!-- 样式 -->
+  <link rel="stylesheet" href="/styles/tokens.css">
+  <link rel="stylesheet" href="/styles/base.css">
+  <link rel="stylesheet" href="/styles/components.css">
+  <link rel="stylesheet" href="/styles/layout.css">
+  
+  <!-- 站点图标 -->
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="alternate icon" type="image/png" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <meta name="theme-color" content="#10B981">
+  <meta name="apple-mobile-web-app-title" content="Qoder BYOK">
+  <meta name="application-name" content="Qoder BYOK 控制台">
+</head>
+<body>
+  <div class="app">
+    <!-- 侧边栏 -->
+    <aside class="sidebar" id="sidebar">
+      <!-- 由 main.js 动态渲染 -->
+    </aside>
+    
+    <!-- 主内容区 -->
+    <main class="main">
+      <!-- 顶栏 -->
+      <header class="topbar">
+        <div class="topbar__left">
+          <div>
+            <h1 class="topbar__title">Qoder BYOK 控制台</h1>
+            <p class="topbar__subtitle">本地模型网关管理</p>
+          </div>
+        </div>
+        
+        <div class="topbar__right">
+          <div class="topbar__status" id="topbar-status">
+            <!-- 由 main.js 动态渲染 -->
+          </div>
+        </div>
+      </header>
+
+      <!-- 全局错误提示（由 main.js 控制） -->
+      <div id="error-bar"></div>
+
+      <!-- 内容区 -->
+      <div class="content">
+        <div class="content__inner" id="content">
+          <!-- 由 router.js 渲染视图 -->
+          <div class="loading">
+            <div class="loading__spinner"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  
+  <!-- 主入口 -->
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

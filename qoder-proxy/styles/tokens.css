@@ -1,0 +1,166 @@
+/* ============================
+   Qoder BYOK 控制台 — 设计 Token
+   清新浅色主题
+   ============================ */
+
+:root {
+  /* ---------- 背景层（清透淡蓝灰） ---------- */
+  --color-bg: #F0F2F8;
+  --color-bg-tint: #E6E9F2;
+  --color-bg-deep: #DDE1EC;
+
+  /* ---------- 表面层（纯白卡片） ---------- */
+  --color-surface: #FFFFFF;
+  --color-surface-2: #F8F9FC;
+  --color-surface-3: #EEF1F7;
+
+  /* ---------- 边框（浅灰蓝） ---------- */
+  --color-border: #E6E9F1;
+  --color-border-strong: #CBD2E0;
+  --color-border-soft: #F0F2F8;
+
+  /* ---------- 文字 ---------- */
+  --color-text: #1A2233;
+  --color-text-dim: #46536B;
+  --color-text-muted: #66738C;
+  --color-text-faint: #8A93A6;
+
+  /* ---------- 主色（清新翡翠绿） ---------- */
+  --color-accent: #4F46E5;
+  --color-accent-hover: #4338CA;
+  --color-accent-active: #3730A3;
+  /* 实心填充（配白字）：#10B981 白字只有 2.54:1，不合格 */
+  --color-accent-strong: #4338CA;
+  --color-accent-soft: #EEF0FF;
+  --color-accent-border: #C7CBF9;
+  --color-on-accent: #FFFFFF;
+
+  /* ---------- 成功（状态点/已应用/在线） ---------- */
+  --color-success: #059669;
+  --color-success-strong: #047857;
+  --color-success-soft: #ECFDF5;
+  --color-success-border: #A7F3D0;
+
+  /* ---------- 危险 ---------- */
+  --color-danger: #DC2626;
+  --color-danger-hover: #DC2626;
+  --color-danger-soft: #FEF2F2;
+  --color-danger-border: #FECACA;
+  --color-on-danger: #FFFFFF;
+
+  /* ---------- 警告 ---------- */
+  --color-warning: #D97706;
+  --color-warning-soft: #FFFBEB;
+  --color-warning-border: #FDE68A;
+
+  /* ---------- 信息（清透蓝） ---------- */
+  --color-info: #0284C7;
+  --color-info-soft: #EFF6FF;
+  --color-info-border: #BFDBFE;
+
+  /* ---------- 紫色（点缀） ---------- */
+  --color-violet: #7C3AED;
+  --color-violet-soft: #F5F3FF;
+
+  /* ---------- 间距 ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --space-9: 48px;
+  --space-10: 64px;
+
+  /* ---------- 圆角 ---------- */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* ---------- 阴影（轻柔） ---------- */
+  --shadow-xs: 0 1px 2px rgba(22, 35, 58, 0.04);
+  --shadow-sm: 0 1px 2px rgba(22, 35, 58, 0.04), 0 2px 8px rgba(22, 35, 58, 0.05);
+  --shadow-md: 0 2px 6px rgba(22, 35, 58, 0.06), 0 8px 24px rgba(22, 35, 58, 0.07);
+  --shadow-lg: 0 6px 16px rgba(22, 35, 58, 0.08), 0 20px 48px rgba(22, 35, 58, 0.1);
+  --shadow-focus: 0 0 0 3px rgba(79, 70, 229, 0.18);
+  --shadow-inset: inset 0 1px 2px rgba(22, 35, 58, 0.04);
+
+  /* ---------- 字体 ---------- */
+  --font-sans: "IBM Plex Sans", "Fira Sans", system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, "Cascadia Code", Consolas, monospace;
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 21px;
+  --text-2xl: 25px;
+  --text-3xl: 30px;
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.7;
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* ---------- 过渡 ---------- */
+  --duration-fast: 130ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ---------- 层级 ---------- */
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal: 300;
+  --z-toast: 400;
+
+  /* ---------- 布局 ---------- */
+  --sidebar-width: 224px;
+  --sidebar-collapsed-width: 68px;
+  --topbar-height: 64px;
+  --content-max-width: 1240px;
+
+  /* ---------- 兼容旧别名 ---------- */
+  --bg: var(--color-bg);
+  --surface: var(--color-surface);
+  --surface2: var(--color-surface-2);
+  --border: var(--color-border);
+  --border-strong: var(--color-border-strong);
+  --fg: var(--color-text);
+  --fg-dim: var(--color-text-dim);
+  --fg-muted: var(--color-text-muted);
+  --accent: var(--color-accent);
+  --accent-soft: var(--color-accent-soft);
+  --danger: var(--color-danger);
+  --danger-soft: var(--color-danger-soft);
+  --warn-soft: var(--color-warning-soft);
+  --sp-1: var(--space-1);
+  --sp-2: var(--space-2);
+  --sp-3: var(--space-3);
+  --sp-4: var(--space-4);
+  --sp-5: var(--space-5);
+  --sp-6: var(--space-6);
+  --sp-7: var(--space-7);
+  --sp-8: var(--space-8);
+  --r-sm: var(--radius-sm);
+  --r-md: var(--radius-md);
+  --r-lg: var(--radius-lg);
+  --fs-xs: var(--text-xs);
+  --fs-sm: var(--text-sm);
+  --fs-base: var(--text-base);
+  --fs-md: var(--text-md);
+  --fs-lg: var(--text-lg);
+  --dur: var(--duration-normal);
+  --ease: var(--ease-out);
+}

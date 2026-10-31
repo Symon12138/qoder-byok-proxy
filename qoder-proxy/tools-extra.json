@@ -1,0 +1,136 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "Write",
+      "description": "Use this tool to create a new file with content or modify existing files. Provide an absolute file_path, the file_content (at most 1000 lines), and optionally add_last_line_newline.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "Absolute path to the target file"
+          },
+          "file_content": {
+            "type": "string",
+            "description": "The content of the file"
+          },
+          "add_last_line_newline": {
+            "type": "boolean",
+            "description": "Whether to add newline at end"
+          }
+        },
+        "required": [
+          "file_path",
+          "file_content"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "DeleteFile",
+      "description": "Delete a file safely. ONLY use this tool to delete a file; the path must be absolute.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "The file path to delete. Must be an absolute path."
+          }
+        },
+        "required": [
+          "file_path"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "Bash",
+      "description": "Execute a shell command in the terminal. For terminal operations like git, npm, docker. Do not use it for file read/write/edit. Prefer absolute paths. Set is_background=true for long-running commands, then poll with GetTerminalOutput.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "The shell command to execute (max 500 characters)."
+          },
+          "command_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The primary command names used, e.g. [\"git\"]."
+          },
+          "has_risk": {
+            "type": "boolean",
+            "description": "Whether the command is potentially destructive."
+          },
+          "is_background": {
+            "type": "boolean",
+            "description": "Run in the background and return a terminal id."
+          },
+          "timeout": {
+            "type": "integer",
+            "description": "Timeout in milliseconds."
+          },
+          "terminal_id": {
+            "type": "string",
+            "description": "Reuse an existing terminal."
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "GetTerminalOutput",
+      "description": "Get the output of a terminal command previously started with Bash. Waits for completion according to wait_seconds.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "terminal_id": {
+            "type": "string",
+            "description": "The ID of the terminal command output to check."
+          },
+          "wait_seconds": {
+            "type": "integer",
+            "description": "Wait time in seconds: 2 for quick commands, 15 for builds/tests, 30 for app start, up to 180 for long tasks. Default 2."
+          }
+        },
+        "required": [
+          "terminal_id"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "GetProblems",
+      "description": "Get compile or lint errors for one or more files.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Absolute paths of the files to check."
+          }
+        },
+        "required": [
+          "file_paths"
+        ]
+      }
+    }
+  }
+]

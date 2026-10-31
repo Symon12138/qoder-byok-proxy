@@ -1,0 +1,40 @@
+# E:\Project\AI\dsh 是个共享目录，里面还放着别的项目（_refs / chinastudyfree-nas /
+# ppt-jd / viz / .npm 等）。所以这里用白名单：先忽略全部，再逐个放行本项目的文件。
+# 只在本目录 git init 是为了保持现有绝对路径不变（脚本里大量引用 ../apply-all.ps1）。
+/*
+!/.gitignore
+!/experts-patch.js
+!/apply-all.ps1
+!/revert-all.ps1
+!/run-experts-patch.ps1
+!/fix-qoder-checksums.ps1
+!/sync-qoder-model.ps1
+!/qoder-proxy/
+
+# ---- qoder-proxy 内部再排除 ----
+# 运行时数据（会一直增长）
+/qoder-proxy/bodies/
+/qoder-proxy/proxy.log
+/qoder-proxy/proxy.log.*
+
+# 含明文 apiKey，绝不入库
+/qoder-proxy/config.json
+
+# 证书私钥：CA 私钥泄漏等于任何人都能伪造任意站点
+/qoder-proxy/ca.key
+/qoder-proxy/leaf.key
+/qoder-proxy/*.srl
+/qoder-proxy/*.csr
+
+# 测试脚手架与产物
+/qoder-proxy/_rt_out/
+/qoder-proxy/_fp_out/
+/qoder-proxy/_regress/
+
+# 临时脚本（下划线开头）与备份
+/qoder-proxy/_*.js
+/qoder-proxy/_*.txt
+/qoder-proxy/_*.png
+/qoder-proxy/*.bak
+/qoder-proxy/*.bak-*
+/qoder-proxy/_*.png
