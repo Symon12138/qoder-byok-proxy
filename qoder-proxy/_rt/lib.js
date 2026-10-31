@@ -227,6 +227,12 @@ function connect(wsUrl) {
     ws.onmessage = (e) => {
       const m = JSON.parse(e.data);
       if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); return; }
+      // 页面会弹 confirm()（删除上游、退出服务等）。无头模式下对话框会阻塞
+      // 页面 JS，点击后整个流程就卡住 —— 必须自动接受，否则测试永远等不到结果。
+      if (m.method === 'Page.javascriptDialogOpening') {
+        ws.send(JSON.stringify({ id: ++id, method: 'Page.handleJavaScriptDialog', params: { accept: true } }));
+        return;
+      }
       if (m.method === 'Runtime.exceptionThrown') {
         const d = m.params.exceptionDetails || {};
         errors.push((d.text || '') + ' :: ' + String((d.exception && d.exception.description) || '').split('\n')[0]);
