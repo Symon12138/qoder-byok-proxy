@@ -214,7 +214,7 @@ node E:\Project\AI\dsh\qoder-proxy\admin.js
 **不显示、拒绝修改、始终应用**——关掉只会让功能残缺。
 
 开关存 `config.json` 的 `patches` 字段（值为功能名，如 `{"experts":true,"repowiki":false}`）。
-命令行 `--only=P1,P2` / `--skip=P8` 优先级高于配置文件。
+命令行 `--only=P1,P4` / `--skip=P12` 优先级高于配置文件（ID 见下方补丁清单）。
 
 **注意**：勾选只决定「下次应用补丁时写不写这条」，要立刻生效需点**应用全部补丁**。
 
@@ -516,7 +516,6 @@ Qoder IDE 支持 `~/.qoder/argv.json`，加一行即可让 IDE 跳过证书校�
 | 补丁 | 作用 | 可否关 |
 |---|---|---|
 | P1 | 自定义模型存在性校验恒通过（消除初始化时序竞态） | 否（内部） |
-| P2 | `getAvailableModelConfigs` 在 EXPERTS 通道合并 custom（带 displayName） | 是（随 `experts`） |
 | P4 | 解除专家团模式的 BYOK 门控 | 是（随 `experts`） |
 | P5a/b/c | 专家团下显示 custom 列表 / 标签页 / 真实模型名 | 否（内部） |
 | P6 | 不再产生 id 占位项 | 否（内部） |
