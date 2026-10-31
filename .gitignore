@@ -9,6 +9,7 @@
 !/run-experts-patch.ps1
 !/fix-qoder-checksums.ps1
 !/sync-qoder-model.ps1
+!/QODER-BYOK-PATCH.md
 !/qoder-proxy/
 
 # ---- qoder-proxy 内部再排除 ----

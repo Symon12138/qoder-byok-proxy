@@ -12,7 +12,11 @@ Qoder IDE ──http.proxy──> 127.0.0.1:8788 (本代理)
                               │     → POST 你的网关 /chat/completions (stream)
                               │     → 包成 Qoder SSE 信封回给 IDE
                               │
-                              └─ 其他请求 → 原样隧道到 127.0.0.1:9940 (换号器)
+                              └─ 其他请求 → 原样隧道到 api3.qoder.sh
+
+出站方向默认直连；如果外网需要经上游代理转发（例如换号器），
+在环境变量 UPSTREAM_PROXY 或 config.upstreamProxy 里填地址即可，
+不填就是直连。源码顶部注释里写的 9940 只是作者本机的示例值。
 ```
 
 ## 配置 `config.json`
@@ -31,7 +35,16 @@ Qoder IDE ──http.proxy──> 127.0.0.1:8788 (本代理)
     "extra": { "任何额外字段": "原样透传给网关" }
   },
   "serveCustomModels": true,
-  "customSourceValues": ["custom", "byok"]
+  "customSourceValues": ["custom", "byok"],
+
+  "proxyPort": 8788,
+  "ideRoot": "D:\\Qoder IDE",
+  "ideProxyPort": 8788,
+  "recordId": "model_mocktest",
+  "injectTools": true,
+  "serveWiki": true,
+  "activeProfile": "本地网关",
+  "profiles": { "本地网关": { "baseUrl": "...", "apiKey": "...", "model": "..." } }
 }
 ```
 
@@ -40,6 +53,17 @@ Qoder IDE ──http.proxy──> 127.0.0.1:8788 (本代理)
 - `maxTokens` / `temperature` / `topP` / `parallelToolCalls`（可选）：透传为同名参数。
 - `extra`（可选）：任意对象，原样合并进请求体，用于网关特有参数。
 - 改完**无需重启代理**，下一条消息生效（每次请求都会重读 config）。
+
+与代理端口相关的三个字段，容易搞混：
+
+| 字段 | 含义 | 谁写 |
+|---|---|---|
+| `proxyPort` | 代理监听端口（默认 8788，必须是 1~65535 的整数，非法值会被忽略） | 控制台「系统设置」 |
+| `ideProxyPort` | 我们期望 IDE 指向哪个端口，用于被 Qoder 覆盖后自动恢复 | 点「IDE 走代理」时自动写 |
+| `profiles` / `activeProfile` | 多套上游，同一时刻只有一套生效 | 控制台「上游配置」 |
+
+改 `proxyPort` 时控制台会顺手把 `settings.json` 里的 `http.proxy` 一起改到新端口 ——
+否则 IDE 会指向一个没人监听的端口，表现为 Qoder 静默失联。
 
 ## 支持的上游能力
 
@@ -496,20 +520,26 @@ Qoder IDE 支持 `~/.qoder/argv.json`，加一行即可让 IDE 跳过证书校�
 | P4 | 解除专家团模式的 BYOK 门控 | 是（随 `experts`） |
 | P5a/b/c | 专家团下显示 custom 列表 / 标签页 / 真实模型名 | 否（内部） |
 | P6 | 不再产生 id 占位项 | 否（内部） |
-| P7 | 服务端列表刷新后合并 custom（含 const→let，自包含） | 否（内部） |
-| P9 | 构造恢复缓存时合并 custom（自包含） | 否（内部） |
+| P13 | 模型可用性判定放行自定义模型（否则每次启动被重置成默认模型） | 否（内部，但缺了它模型选择会丢） |
 | P12 | 去掉 RepoWiki「当前版本无法生成」的商业门控 | 是（`repowiki`） |
 
 用法：
 
 ```powershell
-node E:\Project\AI\dsh\experts-patch.js --dry            # 只看哪些待应用（0 处 = 已应用）
-node E:\Project\AI\dsh\experts-patch.js --quest          # 应用（场景含 QUEST，供 RepoWiki 用）
-node E:\Project\AI\dsh\experts-patch.js --only=P1,P2     # 只应用指定几条
-node E:\Project\AI\dsh\experts-patch.js --skip=P12       # 跳过指定几条
+node E:\Project\AI\dsh\experts-patch.js --dry              # 只看哪些待应用（0 处 = 已应用）
+node E:\Project\AI\dsh\experts-patch.js                    # 应用
+node E:\Project\AI\dsh\experts-patch.js --only=P1,P4       # 只应用指定几条
+node E:\Project\AI\dsh\experts-patch.js --skip=P12         # 跳过指定几条
+
+\`--quest\` 是历史开关，现在无任何作用（自定义模型改由 Qoder 原生「自定义」分组承载，
+已经没有按场景注入的补丁了），传了也不会报错。
 ```
 
-之后必须重跑 `fix-qoder-checksums.ps1`（`apply-all.ps1` 会自动做）。备份为 `*.bak-experts-*`。
+之后必须重跑 `fix-qoder-checksums.ps1`（`apply-all.ps1` 会自动做）。
+
+备份文件是 `<bundle>.bak-experts-<时间戳>`，每个 bundle 只保留最近 1 份 ——
+早期没有轮转，13 次应用堆了 1.4 GB。回滚并不依赖这些备份（revert 是反向替换补丁），
+它们只用于灾难恢复。
 
 **场景枚举名（如 `un` / `on`）会随 Qoder 版本变化**，脚本从 bundle 动态探测并打印，不要硬编码——
 早期写死 `un.EXPERTS` 曾导致某次更新后合并判断恒为 false、补丁静默失效。
@@ -537,15 +567,36 @@ node E:\Project\AI\dsh\experts-patch.js --skip=P12       # 跳过指定几条
 
 实测：代理把 12 条消息（含完整系统提示）发给本地 mock，mock 返回 `MOCK_OK`，IDE 正常接收并在下一轮把该回复带入历史。
 
+## 自愈守卫（后台定时检查）
+
+Qoder 会在退出时把它内存里的 settings / 模型状态整份写回，覆盖掉我们写的东西。
+与其和它抢，不如定期核对并补回。控制台里跑着三个定时器：
+
+| 守卫 | 周期 | 做什么 | 触发条件 |
+|---|---|---|---|
+| 代理存活 | 15 秒 | IDE 指向本代理但端口没在监听时自动拉起 | `http.proxy` 匹配且端口不通 |
+| 场景绑定 | 20 秒 | `chat.modelConfig.assistant` / `.experts` **整行不存在**时补回 `custom:<recordId>` | 只补缺失的行，已有值一律不动 |
+| http.proxy | 30 秒 | `config.ideProxyPort` 有值但 settings.json 里的指向丢了，补回去 | 只补丢失的指向 |
+
+外加磁盘卫生（启动后 20 秒跑一次，之后每 30 分钟）：
+`bodies/` 只留最近 400 个采样文件；`proxy.log` 超过 20 MB 滚动成 `proxy.log.1`。
+
+设计原则：**只补"缺失"，不覆盖"已有"**。用户主动把模型切回官方（值是 `auto`）、
+主动点「退出服务」清掉代理指向，守卫都不会插手 —— 因为那时对应的标记也一起清掉了。
+
 ## 已知限制
 
 - **同一时刻只有一个自定义模型在线**：Qoder 的模型记录里只有一条（默认 `model_mocktest`），
   切换上游会覆盖它。控制台可存多套上游，但不是多个模型并行（见「常见问题」第 9 条）。
-- **代理/控制台进程偶发退出**：遇到界面连不上时，重新点「IDE 走代理」即可拉起。
-- **上游排队**：`queue.full` / `queue.waiting` 是网关侧排队，换模型即可（见「常见问题」第 3 条）。
+- **代理/控制台进程偶发退出**：现在有两层自愈（见「自愈守卫」），仍失效时重新点「IDE 走代理」。
+- **上游排队**：`queue.full` / `queue.waiting` 是网关侧排队，换模型即可。
 - **Qoder 升级会冲掉补丁**：需重跑 `apply-all` 或 `experts-patch`，平时关闭自动更新（见「必读」章节）。
 - **场景枚举名随版本变化**：脚本动态探测，不要硬编码。
-- **代理未做鉴权**，仅监听 127.0.0.1。
+- **控制台没有 token 鉴权**，只监听 127.0.0.1，并用 `Origin` 校验挡掉浏览器跨站请求。
+  本机上以命令行方式调用不受限制（这是刻意的，方便脚本化）。
+- **单块超大内容会拆成 64KB 转发**：上游若在一个 SSE data 里塞 8MB，Qoder 会因单条消息过大
+  在持久化环节报 `ENOSPC`（磁盘其实还有空间）。代理现在把超过 64KB 的 delta 切片转发。
+  极端情况下（8MB 单块）代理自身 RSS 会冲到约 690MB，正常使用不会遇到。
 
 已不再是限制（此前记录、现已实现）：图片/多模态（两个来源都转 OpenAI content parts）、
 工具调用（透传 + 补全 + 格式归一化）、多轮工具链（`tool_calls` / `tool_call_id` 完整保留）。
