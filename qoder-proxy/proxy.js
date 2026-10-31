@@ -354,8 +354,47 @@ function extractMessages(text) {
 
 // Normalise tool-call deltas so stricter clients (Qoder's parser) accept them:
 // arguments must be a JSON string, and type must be "function".
-function normalizeChunk(obj) {
-  const choices = obj && obj.choices;
+/**
+ * 把过大的 chunk 拆成小片再转发。
+ *
+ * 起因（实测）：让上游在一个 SSE data 里吐 8MB 内容时，Qoder 能收到并渲染，
+ * 但随后的持久化环节直接失败：
+ *   main.log  ENOSPC: no space left on device, write
+ *   agent.log streaming -> error, trigger: chat_finish:Disk quota exceeded or disk is full
+ * 明明磁盘还有几 GB 空闲，说明是"单条消息体量过大"触发了它内部的写入限制。
+ * 真实上游是一小块一小块吐的，所以代理这边把超大 delta 切成 64KB 再转发，
+ * 让下游看到的就是正常流式响应，既不影响正常场景，也不给异常上游留坑。
+ */
+const MAX_FORWARD_CHUNK = 64 * 1024;
+
+function splitLargeChunk(obj) {
+  const choice = obj && Array.isArray(obj.choices) ? obj.choices[0] : null;
+  const delta = choice && choice.delta;
+  if (!delta || typeof delta.content !== 'string' || delta.content.length <= MAX_FORWARD_CHUNK) {
+    return [obj];
+  }
+  const text = delta.content;
+  const out = [];
+  for (let i = 0; i < text.length; i += MAX_FORWARD_CHUNK) {
+    const piece = {
+      id: obj.id, object: obj.object || 'chat.completion.chunk', created: obj.created, model: obj.model,
+      choices: [{
+        index: choice.index || 0,
+        delta: { content: text.slice(i, i + MAX_FORWARD_CHUNK) },
+        finish_reason: null,
+      }],
+    };
+    out.push(piece);
+  }
+  // 原来的 finish_reason / tool_calls 等字段挂在最后一片上，避免丢失
+  const last = out[out.length - 1];
+  last.choices[0].finish_reason = choice.finish_reason || null;
+  if (delta.tool_calls) last.choices[0].delta.tool_calls = delta.tool_calls;
+  if (delta.role) out[0].choices[0].delta.role = delta.role;
+  return out;
+}
+
+function normalizeChunk(obj) {  const choices = obj && obj.choices;
   if (!Array.isArray(choices)) return;
   for (const c of choices) {
     const calls = c && c.delta && c.delta.tool_calls;
@@ -612,6 +651,8 @@ function serveCustomModel(req, res, decodedText, cfg, rawBody) {
         }
         const fr = obj && obj.choices && obj.choices[0] && obj.choices[0].finish_reason;
         if (fr) sawFinish = true;
+        // 大块拆小再转发（见 splitLargeChunk 注释）
+        for (const piece of splitLargeChunk(obj)) res.write(envelope(piece));
         if (sample && !sample.done) {
           const d = obj && obj.choices && obj.choices[0] && obj.choices[0].delta;
           if (d && typeof d.content === 'string' && d.content) sample.text += d.content;
@@ -622,7 +663,6 @@ function serveCustomModel(req, res, decodedText, cfg, rawBody) {
           }
           if (sample.text.length > 500000) { sample.done = true; dumpWikiSample(sample); }
         }
-        res.write(envelope(obj));
       }
     });
     upRes.on('end', () => {
