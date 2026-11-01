@@ -80,6 +80,10 @@ connectReq.on('connect', (res, socket) => {
         'x-model-key': 'custom_model',
         'x-model-source': 'system',
         accept: 'text/event-stream',
+        // 带上和真实 Qoder 一致的身份类头部，用来验证代理有没有把它们透传给上游
+        'user-agent': 'Go-http-client/1.1',
+        'cosy-version': '1.38.0',
+        'x-request-id': 'probe-' + Date.now().toString(36),
       },
     }, (r) => {
       let raw = '';

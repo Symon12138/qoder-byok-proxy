@@ -612,6 +612,22 @@ function serveCustomModel(req, res, decodedText, cfg, rawBody) {
       'content-type': 'application/json',
       authorization: 'Bearer ' + up.apiKey,
       accept: 'text/event-stream',
+      // 让上游知道请求从哪来。Qoder 原始请求带着 user-agent / cosy-version /
+      // x-request-id，我们以前一个都没转发，网关那边看起来就像"某个匿名脚本"。
+      // 只转发与"来源"有关、不含机器标识与令牌的字段：
+      //   user-agent     原样转发（Qoder 的 Go 客户端发的是 Go-http-client/1.1）
+      //   x-qoder-client 明确标注来自 Qoder IDE（user-agent 太通用，看不出产品）
+      //   x-qoder-version Qoder 版本（取自 cosy-version）
+      //   x-qoder-proxy  标记经过了本项目代理，便于网关侧区分直连与代理流量
+      //   x-request-id   链路关联（Qoder 自己生成的请求 id）
+      // 刻意不转发：authorization/cookie（Qoder 凭据）、cosy-machineid / -machinecode /
+      // -machinetoken / -user（机器与用户标识）、cosy-clientip。这些属于隐私/安全边界，
+      // 不该因为走了代理就泄漏给第三方网关。
+      'user-agent': String(req.headers['user-agent'] || 'qoder-byok-proxy'),
+      'x-qoder-client': 'Qoder-IDE',
+      'x-qoder-proxy': 'byok',
+      ...(req.headers['cosy-version'] ? { 'x-qoder-version': String(req.headers['cosy-version']) } : {}),
+      ...(req.headers['x-request-id'] ? { 'x-request-id': String(req.headers['x-request-id']) } : {}),
     },
   }, (upRes) => {
     res.writeHead(200, {

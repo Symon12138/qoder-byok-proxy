@@ -78,6 +78,29 @@ Qoder IDE ──http.proxy──> 127.0.0.1:8788 (本代理)
 | 工具调用 | ✅ 实测通过 | Qoder 用提示词内工具协议（工具描述在 system prompt，模型按约定输出，LS 解析执行），不需要 OpenAI `tools` 数组 |
 | 采样参数 | ✅ | temperature / top_p / parallel_tool_calls / extra |
 
+## 发往上游的请求头（让网关知道来源）
+
+转发给上游 `/chat/completions` 的请求，以前只带 3 个头（content-type / authorization / accept），
+网关侧看起来就像"某个匿名脚本"。现在会带上来源信息：
+
+| 头 | 值 | 来源 |
+|---|---|---|
+| `user-agent` | 客户端原始 UA（Qoder 发的是 `Go-http-client/1.1`） | 透传 |
+| `x-qoder-client` | `Qoder-IDE` | 代理添加（UA 太通用，看不出产品） |
+| `x-qoder-version` | 例如 `1.38.0` | 取自 Qoder 的 `cosy-version` |
+| `x-qoder-proxy` | `byok` | 代理添加，便于网关区分直连与代理流量 |
+| `x-request-id` | Qoder 生成的请求 id | 透传，用于链路关联 |
+
+**刻意不转发的**（属于隐私/安全边界，不因为走了代理就交给第三方网关）：
+
+- `authorization` / `cookie`：Qoder 自己的凭据，绝不出网
+- `cosy-machineid` / `cosy-machinecode` / `cosy-machinetoken` / `cosy-user`：机器与用户标识
+- `cosy-clientip`：本机内网地址
+
+实测（用回显型假上游 `_rt/stub_headers.js`，它把收到的头当回复吐回来）：
+上游收到 `user-agent: Go-http-client/1.1`、`x-qoder-client: Qoder-IDE`、
+`x-qoder-version: 1.38.0`、`x-qoder-proxy: byok`、`x-request-id: probe-...`。
+
 ## 模型记录同步
 
 网关的 `/v1/models` 返回每个模型的 `display_name`、`max_input_tokens`、`max_output_tokens`、`modalities`、`reasoning_levels`、`tool_call`。
