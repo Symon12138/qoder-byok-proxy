@@ -457,6 +457,57 @@ node E:\Project\AI\dsh\qoder-byok\patch-wb-p5b.js         # 主 bundle 的 P5b�
 实测：专家团下拉出现 `deepseek-v4.1-flash`，选中后 `chat.modelConfig.experts = custom:model_mocktest` 落库。
 `cache.experts` 从 6 条变 7 条（合并去重，不重复累积）。
 
+## 项目结构
+
+```
+qoder-byok/
+├─ experts-patch.js          8 条 bundle 补丁，每条独立可关；备份自动轮转
+├─ apply-all.ps1             提权应用：8 步流水线，先校验两个 bundle 再逐条打
+├─ revert-all.ps1            提权回滚：反向替换，不依赖备份文件
+├─ fix-qoder-checksums.ps1   修 product.json / featureFlags.json 的校验和
+├─ sync-qoder-model.ps1      把网关模型能力写进 Qoder 的 sqlite 模型记录
+├─ run-experts-patch.ps1     apply-all 的中间层：找 node、读配置
+├─ mitm-test.js              不经 IDE 的端到端自测：构真实请求 → 隧道 → 解析 SSE
+├─ QODER-BYOK-PATCH.md       早期"解锁 Qoder 自带 BYOK"方案的记录（已被取代）
+├─ .gitignore                白名单式（先忽略全部，再逐个放行）
+└─ qoder-proxy/
+   ├─ proxy.js               MITM 代理（8788）：解包 → 转发网关 → 包回 SSE 信封
+   ├─ admin.js               控制台后端（3426）：27 个端点 + 三个自愈守卫
+   ├─ admin.html             控制台外壳
+   ├─ index.html             入口页
+   ├─ config.json            运行时配置（含明文 apiKey → 不入库）
+   ├─ ca.crt / ca.key        MITM 用的本地 CA（私钥不入库）
+   ├─ leaf.crt / leaf.key    api3.qoder.sh 的签证书（私钥不入库）
+   ├─ ext.cnf                leaf 证书的扩展配置
+   ├─ tools-extra.json       工具补全用的额外工具定义
+   ├─ icon.svg / icon-192.png  站点图标
+   ├─ src/                   零依赖前端（原生 ES Modules，无构建步骤）
+   │  ├─ main.js             启动、全局快捷键、视图挂载
+   │  ├─ router.js           路由（Alt+1~8 直达）
+   │  ├─ store.js            状态管理 + 5 秒轮询（输入时跳过）
+   │  ├─ api.js              请求封装，按端点设超时
+   │  ├─ components.js       UI 组件 + 全站唯一的 esc()
+   │  ├─ event-manager.js    事件委托
+   │  ├─ base-view.js        视图基类
+   │  ├─ view-bind.js        视图数据绑定
+   │  ├─ toast.js            操作提示条
+   │  └─ views/              8 个视图：概览 / 上游 / 模型能力 / 补丁 / 日志 / 设置 / 维护 / 帮助
+   ├─ styles/                设计令牌 → 布局 → 组件（tokens / layout / components / base）
+   ├─ fonts/                 Fira Sans/Code 的 latin 子集（8 个 woff2 + fira.css，188 KB），不走外网
+   ├─ docs/
+   │  └─ 开发历程与问题记录.md   方向选择、问题台账、验证方法学（回看用）
+   ├─ _rt/                   回归脚手架：lib + p1~p4 + 多上游 + 文档一致性 + 界面冒烟
+   └─ _regress/              历史回归产物（截图/JSON，不入库）
+```
+
+代码规模（按行）：`admin.js` 1177、`proxy.js` 905、`experts-patch.js` 191、
+`src/` 9 个文件 3771、`styles/` 4 个文件 1562。
+
+**入库与不入库**：`.gitignore` 用白名单，只放行源码与文档。
+以下只在本地存在、不进版本库 —— `config.json`（明文 apiKey）、`ca.key` / `leaf.key`
+（CA 私钥泄漏等于任何人都能伪造任意站点）、`proxy.log*`、`bodies/`、`_regress/`、
+`_qoder_byok_backup/`（约 2.9 GB 的原始 bundle 快照，`revert-all.ps1` 的兜底来源）。
+
 ## 目录无关性（可以整体搬动）
 
 整个 `qoder-byok/` 目录搬到哪都能用，不依赖它所在的位置，也不依赖你从哪个目录启动。
