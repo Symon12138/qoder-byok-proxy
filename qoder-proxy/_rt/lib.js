@@ -11,7 +11,7 @@ const { spawn, spawnSync, execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const ROOT = 'E:\\Project\\AI\\dsh';
+const ROOT = path.resolve(__dirname, '..', '..');
 const PROXY = path.join(ROOT, 'qoder-proxy');
 const NODE = 'E:\\environment\\nodejs\\node.exe';
 const SQLITE = 'C:\\Users\\Administrator\\scoop\\shims\\sqlite3.exe';

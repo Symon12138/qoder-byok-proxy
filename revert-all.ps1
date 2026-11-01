@@ -16,7 +16,7 @@ $ErrorActionPreference = 'Stop'
 # apply-all.ps1 snapshots the CURRENT bundle every run; if it was already
 # patched, that snapshot is patched too - reverting to it would be a no-op.
 if (-not $BackupDir) {
-  $bkRoot = 'E:\Project\AI\dsh\_qoder_byok_backup'
+  $bkRoot = Join-Path $PSScriptRoot '_qoder_byok_backup'
   if (Test-Path -LiteralPath $bkRoot) {
     # All four patch markers must be absent for a backup to count as pristine.
     # Checking only one marker is not enough: some snapshots had 2 of 4 patches
@@ -47,7 +47,7 @@ if (-not $BackupDir) {
   }
 }
 if (-not $BackupDir) { throw 'no PRISTINE backup found (all backups look patched)' }
-$logPath = 'E:\Project\AI\dsh\_revert_all_log.txt'
+$logPath = Join-Path $PSScriptRoot '_revert_all_log.txt'
 function Log([string]$m) { Add-Content -LiteralPath $logPath -Value ('[{0}] {1}' -f (Get-Date -Format 'HH:mm:ss'), $m) -Encoding UTF8 }
 if (Test-Path -LiteralPath $logPath) { Remove-Item -LiteralPath $logPath -Force }
 Log "start root=$Root"

@@ -1,6 +1,6 @@
-# E:\Project\AI\dsh 是个共享目录，里面还放着别的项目（_refs / chinastudyfree-nas /
-# ppt-jd / viz / .npm 等）。所以这里用白名单：先忽略全部，再逐个放行本项目的文件。
-# 只在本目录 git init 是为了保持现有绝对路径不变（脚本里大量引用 ../apply-all.ps1）。
+# 本项目是独立目录（qoder-byok/），所有脚本用 $PSScriptRoot / __dirname 定位，
+# 不再依赖绝对路径，整个目录可以整体搬动。
+# 仍用白名单写法：先忽略全部，再逐个放行需要入库的文件。
 /*
 !/.gitignore
 !/experts-patch.js
@@ -9,6 +9,7 @@
 !/run-experts-patch.ps1
 !/fix-qoder-checksums.ps1
 !/sync-qoder-model.ps1
+!/mitm-test.js
 !/QODER-BYOK-PATCH.md
 !/qoder-proxy/
 
@@ -38,4 +39,11 @@
 /qoder-proxy/_*.png
 /qoder-proxy/*.bak
 /qoder-proxy/*.bak-*
-/qoder-proxy/_*.png
+
+# 应用补丁时的 bundle 原始备份（约 2.9 GB，只在本机保留）
+/_qoder_byok_backup/
+
+# 运行日志
+/_apply_all_log.txt
+/_revert_all_log.txt
+/_checksum_log.txt

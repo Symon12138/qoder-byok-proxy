@@ -10,7 +10,7 @@ $ErrorActionPreference = 'Continue'
 # Chinese lines they print show up as mojibake in the log file.
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
-$dir = 'E:\Project\AI\dsh'
+$dir = $PSScriptRoot
 $logPath = Join-Path $dir '_apply_all_log.txt'
 function Log([string]$m) { Add-Content -LiteralPath $logPath -Value ('[{0}] {1}' -f (Get-Date -Format 'HH:mm:ss'), $m) -Encoding UTF8 }
 if (Test-Path -LiteralPath $logPath) { Remove-Item -LiteralPath $logPath -Force }

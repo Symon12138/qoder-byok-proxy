@@ -6,7 +6,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$logPath = 'E:\Project\AI\dsh\_checksum_log.txt'
+$logPath = Join-Path $PSScriptRoot '_checksum_log.txt'
 function Log([string]$m) {
   $line = ('[{0}] {1}' -f (Get-Date -Format 'HH:mm:ss'), $m)
   Write-Output $line

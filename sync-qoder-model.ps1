@@ -4,7 +4,7 @@
 # /v1/models, and rewrites aicoding.customModels so the IDE shows the right
 # display name, context window, vision flag and reasoning levels.
 param(
-  [string]$ProxyDir = 'E:\Project\AI\dsh\qoder-proxy',
+  [string]$ProxyDir = (Join-Path $PSScriptRoot 'qoder-proxy'),
   [string]$Id = 'model_mocktest'
 )
 

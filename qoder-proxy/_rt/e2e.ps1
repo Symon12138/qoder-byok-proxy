@@ -76,7 +76,7 @@ if ($ok) {
   $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
   $g = [System.Drawing.Graphics]::FromImage($bmp)
   $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
-  $out = 'E:\Project\AI\dsh\qoder-proxy\_rt_out\final_e2e2.png'
+  $out = Join-Path $PSScriptRoot '_rt_out\final_e2e2.png'
   $bmp.Save($out, [System.Drawing.Imaging.ImageFormat]::Png)
   $g.Dispose()
   $bmp.Dispose()

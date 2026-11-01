@@ -84,7 +84,7 @@ Qoder IDE ──http.proxy──> 127.0.0.1:8788 (本代理)
 用脚本按当前 `config.upstream.model` 自动写回 Qoder 的模型记录：
 
 ```powershell
-pwsh -File E:\Project\AI\dsh\sync-qoder-model.ps1
+pwsh -File E:\Project\AI\dsh\qoder-byok\sync-qoder-model.ps1
 ```
 
 会更新显示名、上下文窗口、`is_vl`（是否支持图片）、`thinkingConfig`（等级选项）。改完重启 IDE 生效。
@@ -129,7 +129,7 @@ Qoder 模型选择器显示的是模型记录里的 `displayName`（存于 `aico
 ## 控制台（推荐入口）
 
 ```powershell
-node E:\Project\AI\dsh\qoder-proxy\admin.js
+node E:\Project\AI\dsh\qoder-byok\qoder-proxy\admin.js
 # 打开 http://127.0.0.1:3426
 ```
 
@@ -262,7 +262,7 @@ _doRTgHZBKcGVjlvpC,@aFSx#DPuNJme&i*MzLOEn)sUrthbf%Y^w.(kIQyXqWA!
 
 ## 代理自测（不需要 IDE）
 
-`E:\Project\AI\dsh\mitm-test.js` —— 用 qoder 编码器构造真实请求，经 HTTP CONNECT 隧道打到本代理，
+`E:\Project\AI\dsh\qoder-byok\mitm-test.js` —— 用 qoder 编码器构造真实请求，经 HTTP CONNECT 隧道打到本代理，
 直接验证「解码 → 提取 → 转发上游 → SSE 封包」整条链路：
 
 ```powershell
@@ -371,8 +371,8 @@ Get-Item 'D:\Qoder IDE\resources\app\out\vs\workbench\workbench.desktop.main.js'
 **修复**：补丁脚本幂等，重跑即可（会关闭 Qoder，跑完手动重开）：
 
 ```powershell
-node E:\Project\AI\dsh\experts-patch.js --dry   # 先看哪些待应用（0 处 = 已应用）
-node E:\Project\AI\dsh\experts-patch.js          # 需要管理员权限
+node E:\Project\AI\dsh\qoder-byok\experts-patch.js --dry   # 先看哪些待应用（0 处 = 已应用）
+node E:\Project\AI\dsh\qoder-byok\experts-patch.js          # 需要管理员权限
 ```
 
 之后必须重跑 `fix-qoder-checksums.ps1`（`apply-all.ps1` 会自动做）。
@@ -449,9 +449,9 @@ SwitchMode, CreatePlan, createGoal, updateGoal, getGoal, CallMcpTool, Glob, Read
 
 ```powershell
 # 都需要管理员
-powershell -ExecutionPolicy Bypass -File E:\Project\AI\dsh\patch-qoder-experts-refresh.ps1
-node E:\Project\AI\dsh\patch-wb-experts.js     # 主 bundle 的 P1/P4/P5
-node E:\Project\AI\dsh\patch-wb-p5b.js         # 主 bundle 的 P5b（3 处）
+powershell -ExecutionPolicy Bypass -File E:\Project\AI\dsh\qoder-byok\patch-qoder-experts-refresh.ps1
+node E:\Project\AI\dsh\qoder-byok\patch-wb-experts.js     # 主 bundle 的 P1/P4/P5
+node E:\Project\AI\dsh\qoder-byok\patch-wb-p5b.js         # 主 bundle 的 P5b（3 处）
 ```
 
 实测：专家团下拉出现 `deepseek-v4.1-flash`，选中后 `chat.modelConfig.experts = custom:model_mocktest` 落库。
@@ -461,7 +461,7 @@ node E:\Project\AI\dsh\patch-wb-p5b.js         # 主 bundle 的 P5b（3 处）
 
 ```powershell
 # 1. 起代理
-node E:\Project\AI\dsh\qoder-proxy\proxy.js
+node E:\Project\AI\dsh\qoder-byok\qoder-proxy\proxy.js
 
 # 2. 让 IDE 走代理（IDE 设置 → 高级 → 代理 → 手动 → http://127.0.0.1:8788，
 #    或直接改 %APPDATA%\Qoder\User\settings.json 里的 "http.proxy"）
@@ -525,10 +525,10 @@ Qoder IDE 支持 `~/.qoder/argv.json`，加一行即可让 IDE 跳过证书校�
 用法：
 
 ```powershell
-node E:\Project\AI\dsh\experts-patch.js --dry              # 只看哪些待应用（0 处 = 已应用）
-node E:\Project\AI\dsh\experts-patch.js                    # 应用
-node E:\Project\AI\dsh\experts-patch.js --only=P1,P4       # 只应用指定几条
-node E:\Project\AI\dsh\experts-patch.js --skip=P12         # 跳过指定几条
+node E:\Project\AI\dsh\qoder-byok\experts-patch.js --dry              # 只看哪些待应用（0 处 = 已应用）
+node E:\Project\AI\dsh\qoder-byok\experts-patch.js                    # 应用
+node E:\Project\AI\dsh\qoder-byok\experts-patch.js --only=P1,P4       # 只应用指定几条
+node E:\Project\AI\dsh\qoder-byok\experts-patch.js --skip=P12         # 跳过指定几条
 
 \`--quest\` 是历史开关，现在无任何作用（自定义模型改由 Qoder 原生「自定义」分组承载，
 已经没有按场景注入的补丁了），传了也不会报错。

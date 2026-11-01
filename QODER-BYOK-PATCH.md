@@ -47,7 +47,7 @@
 ## 回滚
 
 以管理员身份运行：
-`E:\Project\AI\dsh\_qoder_byok_backup\20261029-110023\revert-qoder-byok.ps1`
+`E:\Project\AI\dsh\qoder-byok\_qoder_byok_backup\20261029-110023\revert-qoder-byok.ps1`
 
 （恢复两个 bundle + `product.json` / `featureFlags.json` 原件）
 

@@ -5,8 +5,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const PX = 'E:\\Project\\AI\\dsh\\qoder-proxy';
-const ROOT = 'E:\\Project\\AI\\dsh';
+const PX = path.resolve(__dirname, '..');
+const ROOT = path.resolve(__dirname, '..', '..');
 const read = (p) => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
 
 const readme = read(path.join(PX, 'README.md'));
