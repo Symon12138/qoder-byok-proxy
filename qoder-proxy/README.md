@@ -473,6 +473,7 @@ qoder-byok/
 └─ qoder-proxy/
    ├─ proxy.js               MITM 代理（8788）：解包 → 转发网关 → 包回 SSE 信封
    ├─ admin.js               控制台后端（3426）：27 个端点 + 三个自愈守卫
+   ├─ certs.js               证书自举：缺失时用 openssl 现场生成 CA + 签证书
    ├─ admin.html             控制台外壳
    ├─ index.html             入口页
    ├─ config.json            运行时配置（含明文 apiKey → 不入库）
