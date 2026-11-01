@@ -457,6 +457,30 @@ node E:\Project\AI\dsh\qoder-byok\patch-wb-p5b.js         # 主 bundle 的 P5b�
 实测：专家团下拉出现 `deepseek-v4.1-flash`，选中后 `chat.modelConfig.experts = custom:model_mocktest` 落库。
 `cache.experts` 从 6 条变 7 条（合并去重，不重复累积）。
 
+## 目录无关性（可以整体搬动）
+
+整个 `qoder-byok/` 目录搬到哪都能用，不依赖它所在的位置，也不依赖你从哪个目录启动。
+两类位置依赖都已消除：
+
+| 依赖类型 | 处理方式 |
+|---|---|
+| 启动时的工作目录（`cwd`） | 代码里**没有一处** `process.cwd()`；配置、日志、采样、证书全部按 `__dirname` 定位 |
+| 脚本里的绝对路径 | `.ps1` 用 `$PSScriptRoot`，`.js` 用 `__dirname`，不再写死盘符 |
+
+实测（把服务的工作目录设成 `C:\` 后启动）：
+
+```
+控制台   Qoder BYOK console: http://127.0.0.1:3426
+代理     proxy listening on 127.0.0.1:8788 -> direct
+状态接口 补丁 4/4、代理在运行、安装目录 D:\Qoder IDE 正常识别
+文件落点 proxy.log 与 bodies/ 仍写在项目内，C:\ 根下无任何残留
+端到端   mitm-test 状态 200，custom-serve-end sawFinish=true
+脚本     apply-all.ps1 / run-experts-patch.ps1 从 C:\ 调用可正确定位兄弟脚本
+```
+
+`config.json` 里唯一带盘符的字段是 `ideRoot`（**被改的 Qoder 装在哪**，不是本项目在哪）。
+它会按「配置 → 缓存 → 常见路径 → 进程」四步自动探测，Qoder 换盘也能自己找到。
+
 ## 启动
 
 ```powershell
