@@ -68,16 +68,23 @@ export default {
 
     el.innerHTML = Card({
       title: '首次使用 · 环境未就绪',
-      subtitle: '点「一键完成」会依次：启动代理 → 应用补丁 → 指向 IDE → 同步模型',
+      subtitle: '点「一键完成」会依次：启动代理 → 同步模型 → 指向 IDE（证书与补丁需单独点）',
       icon: Icon.info,
       iconVariant: 'warning',
       className: 'card--accent',
       children: `
         <div class="flex flex-col gap-3">
-          ${['启动本地代理', '应用补丁（需管理员权限）', '把 IDE 指向代理', '同步模型记录到 IDE']
+          ${['启动本地代理', '同步模型记录到 IDE', '把 IDE 指向代理', '信任代理证书（Windows 弹一次确认，点「是」）', '应用补丁（需管理员权限）']
             .map((t, i) => `<div class="flex items-center gap-3 text-sm"><span class="icon-box icon-box--muted icon-box--sm">${i + 1}</span><span>${t}</span></div>`)
             .join('')}
         </div>
+        ${state.status && state.status.cert && !state.status.cert.trusted ? `
+        <div class="mt-4 p-3" style="background:var(--surface-2);border-radius:var(--radius-md)">
+          <div class="text-sm" style="margin-bottom:8px">
+            证书还没被信任：Qoder 会因证书校验失败连不上本代理。
+          </div>
+          <button class="btn btn--primary" data-act="trust-cert">信任证书</button>
+        </div>` : ''}
       `,
       footer: `
         <div class="btn-group">
@@ -303,6 +310,30 @@ export default {
             toast.warning(`部分步骤未完成：${bad.map((s) => s.step).join('、')}`);
           }
           await actions.loadStatus();
+        } else if (act === 'trust-cert') {
+          el.disabled = true;
+          const origLabel = el.innerHTML;
+          el.innerHTML = '等待确认…';
+          try {
+            const r = await api.trustCert();
+            if (r.already) {
+              await actions.loadStatus();
+              toast.success('证书已在受信任根里');
+            } else {
+              let trusted = false;
+              for (let i = 0; i < 90; i++) {
+                await new Promise((res) => setTimeout(res, 2000));
+                const c = await api.getCert();
+                if (c.trusted) { trusted = true; break; }
+              }
+              await actions.loadStatus();
+              if (trusted) toast.success('证书已信任，重启 Qoder 后生效');
+              else toast.warning('没检测到信任完成，可在「维护」页重试');
+            }
+          } finally {
+            el.disabled = false;
+            el.innerHTML = origLabel;
+          }
         } else if (act === 'setup-skip') {
           await api.markSetupDone();
           await actions.loadStatus();

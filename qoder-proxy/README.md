@@ -549,18 +549,31 @@ node E:\Project\AI\dsh\qoder-byok\qoder-proxy\proxy.js
 
 ## 证书信任（必须做，否则 Qoder 连不上代理）
 
-代理要给 `api3.qoder.sh` 出示自己签的证书，Qoder 必须认这张 CA。两种方式，任选一种：
+代理要给 `api3.qoder.sh` 出示自己签的证书，Qoder 必须认这张 CA。
 
-**方式 A：把 CA 装进「当前用户 → 受信任的根证书颁发机构」**（推荐，本机用的就是这个）
+**方式 A：在控制台点一下（推荐）**
+
+「维护 → 环境状态」里如果显示 `代理证书 未信任`，会有一个 **信任证书** 按钮。
+点它之后 Windows 会弹一个「安全警告」框，选 **是** 即可 —— 不需要管理员权限。
+「状态概览」的首次引导卡里也有同一个按钮。
+
+装完之后状态会变成 `已信任`，重启 Qoder 生效。
+
+> 实现细节（踩过坑）：这一步**不能同步执行**。`certutil -user -addstore` 会一直等到用户点完
+> 弹窗才返回，如果用 `spawnSync` 就会把整个控制台卡死（状态轮询、页面操作全停）。
+> 所以服务端是后台起进程、立刻返回，前端每 2 秒查一次 `/api/cert` 直到 `trusted` 变 true。
+
+**方式 B：命令行（与控制台等价）**
 
 ```powershell
 certutil -user -addstore Root "<项目路径>\qoder-proxy\ca.crt"
 ```
 
-`-user` 表示只影响当前用户，**不需要管理员**。装完重启 Qoder。
-撤销：`certutil -user -delstore Root 1034786A13430FE942B45AE6A76655ED7A3FE7D8`（指纹用 `certutil -user -store Root | findstr Qoder` 查）。
+同样会弹确认框，选「是」。`-user` 表示只影响当前用户，不需要管理员。
+卸载：`certutil -user -delstore Root <指纹>`（删除同样会弹框），
+指纹用 `certutil -user -store Root | findstr Qoder` 查。
 
-**方式 B：让 Qoder 跳过证书校验**
+**方式 C：让 Qoder 跳过证书校验**
 
 编辑 `%USERPROFILE%\.qoder\argv.json`，加一行 `"ignore-certificate-errors": true`，重启 IDE。
 
@@ -580,7 +593,7 @@ certutil -user -addstore Root "<项目路径>\qoder-proxy\ca.crt"
 |---|---|---|
 | 1 | `ca.key` / `leaf.key` / 两个证书 | **自动**：首次启动代理时用 openssl 现场生成（缺了会提示装 Git for Windows） |
 | 2 | `bodies/` 采样目录 | **自动**：启动时 `mkdir -p` |
-| 3 | CA 被系统信任 | 手动：`certutil -user -addstore Root ...` 或 argv.json（见上一节） |
+| 3 | CA 被系统信任 | **点一下**：控制台「维护 → 信任证书」→ Windows 弹窗点「是」（见上一节） |
 | 4 | `config.json`（上游地址 / API Key / 模型） | 手动：没有也能启动，控制台会走首次引导，填完即生效 |
 | 5 | Qoder IDE 本体 | 手动：装好即可，控制台会自动探测安装目录 |
 | 6 | 管理员权限 | 手动：仅在「应用补丁 / 回滚」时需要（改 bundle 与 checksum） |

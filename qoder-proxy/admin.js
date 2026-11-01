@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
 const net = require('net');
+const crypto = require('crypto');
 
 const DIR = __dirname;
 const CONFIG = path.join(DIR, 'config.json');
@@ -101,6 +102,56 @@ function resolveIdeRoot(force) {
     return quick;
   }
   return DEFAULT_IDE_ROOT;                                     // 不做进程探测，避免阻塞
+}
+
+/**
+ * 代理证书状态：读 ca.crt 算指纹，再问 Windows 是否已信任。
+ *
+ * 用 certutil 的退出码判断（0=在受信任根里，0x80090011=没找到），
+ * 不看输出文本 —— 它的输出是 GBK，跨编码解析不可靠。
+ * 指纹用 Node 自带 X509Certificate 算，不依赖 openssl。
+ */
+// 正在等待用户确认的证书安装任务（见 /api/trust-cert）
+let trustJob = null;
+
+// 证书状态缓存：查询要起 certutil 进程（约 0.15s），而 /api/status 每 5 秒被轮询一次，
+// 每次都 spawn 一次纯属浪费，还会阻塞 0.15s 事件循环。缓存 20 秒；
+// 正在安装证书时（trustJob 存在）绕过缓存，保证轮询能立刻看到结果。
+let certCache = { at: 0, info: null };
+const CERT_TTL = 20000;
+
+function certInfo(force) {
+  const fresh = force || trustJob || !certCache.info || Date.now() - certCache.at > CERT_TTL;
+  if (!fresh) return certCache.info;
+  const info = computeCertInfo();
+  certCache = { at: Date.now(), info };
+  return info;
+}
+
+function computeCertInfo() {
+  const caPath = path.join(DIR, 'ca.crt');
+  if (!fs.existsSync(caPath)) {
+    return { ok: false, trusted: false, exists: false, path: caPath, error: 'ca.crt 不存在（启动代理会自动生成）' };
+  }
+  try {
+    const x = new crypto.X509Certificate(fs.readFileSync(caPath));
+    const thumb = x.fingerprint.replace(/:/g, '');
+    const r = spawnSync('certutil', ['-user', '-store', 'Root', thumb], {
+      encoding: 'utf8', windowsHide: true, timeout: 15000,
+    });
+    if (r.status === 0) trustJob = null;   // 装好了就结束轮询状态，恢复正常缓存
+    return {
+      ok: true,
+      exists: true,
+      trusted: r.status === 0,
+      thumbprint: x.fingerprint,
+      subject: x.subject.split('\n').pop(),
+      expires: x.validTo,
+      path: caPath,
+    };
+  } catch (e) {
+    return { ok: false, exists: true, trusted: false, path: caPath, error: e.message };
+  }
 }
 
 function ideInfo() {
@@ -615,6 +666,7 @@ const server = http.createServer(async (req, res) => {
       const [proxyUp] = await Promise.all([portOpen(proxyPort())]);
       const settings = readJSON(SETTINGS, {});
       return send(200, {
+      cert: certInfo(),
         proxy: { running: proxyUp, port: proxyPort() },
         ide: { httpProxy: settings['http.proxy'] || '', autoUpdate: autoUpdateState(), ...ideInfo() },
         patches: patchStatus(),
@@ -850,7 +902,36 @@ const server = http.createServer(async (req, res) => {
       return send(200, { ok: false, error: '未能打开目录选择框（可能当前没有交互桌面）' });
     }
 
-    if (url.pathname === '/api/ide-proxy' && req.method === 'POST') {
+    // 证书状态与一键信任
+  if (url.pathname === '/api/cert' && req.method === 'GET') {
+    return send(200, certInfo());
+  }
+  // 把 ca.crt 装进「当前用户 → 受信任的根证书颁发机构」。
+  //
+  // 这里**故意不用 spawnSync**：certutil 会弹一个「安全警告」对话框等用户点「是」，
+  // 用户不点就一直不返回。同步执行会把整个控制台卡死（状态轮询、页面操作全停），
+  // 和之前 pick-folder 那个坑是同一类。所以改成后台起进程、立刻返回，
+  // 由前端轮询 /api/cert 直到 trusted 变 true。
+  if (url.pathname === '/api/trust-cert' && req.method === 'POST') {
+    const before = certInfo();
+    if (!before.exists) return send(400, { ok: false, error: 'ca.crt 不存在，请先启动代理（会自动生成证书）' });
+    if (before.trusted) return send(200, { ok: true, already: true, cert: before });
+    if (trustJob && Date.now() - trustJob.startedAt < 300000) {
+      return send(200, { ok: true, pending: true, note: '已在等待你在弹窗中确认' });
+    }
+    try {
+      const child = spawn('certutil', ['-user', '-addstore', 'Root', before.path], {
+        detached: true, stdio: 'ignore', windowsHide: false,
+      });
+      child.unref();
+      trustJob = { pid: child.pid, startedAt: Date.now() };
+      console.log('[cert] trust started, pid=' + child.pid);
+      return send(200, { ok: true, pending: true });
+    } catch (e) {
+      return send(500, { ok: false, error: '无法启动 certutil：' + e.message });
+    }
+  }
+  if (url.pathname === '/api/ide-proxy' && req.method === 'POST') {
       const { port } = await body();
       // port === null 表示恢复原样（删除 http.proxy，不用任何代理）
       if (port !== null && port !== 0 && !(await portOpen(port))) {
@@ -1025,15 +1106,28 @@ const server = http.createServer(async (req, res) => {
       // 1) 代理
       if (!(await portOpen(proxyPort()))) { startProxy(); await new Promise((r) => setTimeout(r, 1500)); }
       steps.push({ step: 'proxy', ok: await portOpen(proxyPort()) });
-      // 2) 模型记录
+      // 2) 证书信任：只报告状态，**不在这里安装**。
+      //    certutil 会弹「安全警告」等用户点「是」，装进一键流程会让整个请求挂住，
+      //    用户在弹窗上花多久，控制台就卡多久。安装交给「信任证书」按钮（异步 + 轮询）。
+      try {
+        const ci = certInfo();
+        steps.push({
+          step: 'cert',
+          ok: ci.trusted,
+          needConfirm: !ci.trusted,
+          detail: ci.trusted ? '已信任' : (ci.exists ? '未信任，需在维护页点「信任证书」' : '证书未生成'),
+        });
+      } catch (e) { steps.push({ step: 'cert', ok: false, error: e.message }); }
+
+      // 3) 模型记录
       try {
         const s = syncRecord();
         steps.push({ step: 'record', ok: s.code === 0, out: (s.out || '').split('\n').slice(-3).join(' | ') });
       } catch (e) { steps.push({ step: 'record', ok: false, error: e.message }); }
-      // 3) IDE 代理
+      // 4) IDE 代理
       try { setIdeProxy(proxyPort()); steps.push({ step: 'ide-proxy', ok: true, value: `http://127.0.0.1:${proxyPort()}` }); }
       catch (e) { steps.push({ step: 'ide-proxy', ok: false, error: e.message }); }
-      // 4) 补丁状态（需要提权，仅报告）
+      // 5) 补丁状态（需要提权，仅报告）
       const pat = patchStatus();
       steps.push({ step: 'patches', ok: pat.byok && pat.live, needAdmin: !(pat.byok && pat.live), detail: { byok: pat.byok, live: pat.live } });
       return send(200, { ok: true, steps, config: cfg });

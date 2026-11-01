@@ -55,6 +55,13 @@ export default {
     // 补丁状态用徽章，一眼能区分「已应用 / 缺失」。
     const okBadge = (on) => Badge({ text: on ? '已应用' : '缺失', variant: on ? 'success' : 'danger' });
 
+    const cert = st?.cert || {};
+    const certBadge = cert.trusted
+      ? Badge({ text: '已信任', variant: 'success' })
+      : (cert.exists
+        ? Badge({ text: '未信任', variant: 'danger' })
+        : Badge({ text: '未生成', variant: 'warning' }));
+
     const left = [
       {
         label: '本地代理',
@@ -64,6 +71,7 @@ export default {
       },
       { label: 'IDE 代理', value: st?.ide?.httpProxy ? `<code>${st.ide.httpProxy}</code>` : '未设置（直连）' },
       { label: '当前模型', value: st?.config?.upstream?.displayName || '未配置' },
+      { label: '代理证书', value: certBadge },
     ];
     const right = [
       { label: 'BYOK 补丁', value: okBadge(p?.byok) },
@@ -100,6 +108,14 @@ export default {
           <button class="btn btn--ghost" data-mt="sync">同步模型记录</button>
           <button class="btn btn--ghost" data-mt="reset-setup" title="让「状态概览」重新显示首次引导">重新运行引导</button>
         </div>
+        ${cert.trusted ? '' : `
+        <div class="mt-4 p-3" style="background:var(--surface-2);border-radius:var(--radius-md)">
+          <div class="text-sm" style="margin-bottom:8px">
+            <strong>代理证书未被信任</strong>：Qoder 会因证书校验失败连不上本代理。
+            点下面按钮，Windows 会弹一次安全警告，选「是」即可（不需要管理员）。
+          </div>
+          <button class="btn btn--primary" data-mt="trust-cert">信任证书</button>
+        </div>`}
       `,
     });
   },
@@ -185,6 +201,28 @@ export default {
           await api.resetSetup();
           await actions.loadStatus();
           toast.success('已重置引导标记，「状态概览」会重新显示引导卡');
+        } else if (act === 'trust-cert') {
+          lock('等待确认…');
+          try {
+            const r = await api.trustCert();
+            if (r.already) {
+              await actions.loadStatus();
+              toast.success('证书已在受信任根里，无需重复安装');
+            } else {
+              // 弹窗等用户点「是」，这里轮询到装好为止（最多约 3 分钟）
+              let trusted = false;
+              for (let i = 0; i < 90; i++) {
+                await new Promise((res) => setTimeout(res, 2000));
+                const c = await api.getCert();
+                if (c.trusted) { trusted = true; break; }
+              }
+              await actions.loadStatus();
+              if (trusted) toast.success('证书已信任，重启 Qoder 后生效');
+              else toast.warning('没检测到信任完成。若弹窗被关掉，可再点一次「信任证书」');
+            }
+          } catch (err) {
+            toast.error(err.message || '安装证书失败');
+          }
         } else if (act === 'export') {
           lock('导出中…');
           const data = await api.exportConfig();

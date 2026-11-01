@@ -82,9 +82,9 @@ if (!certStatus.ok) {
 }
 if (certStatus.created) {
   console.log('certificates generated: ' + path.join(DIR, 'ca.crt'));
-  console.log('  → 首次使用需要让系统信任这张 CA，否则 Qoder 会因证书校验失败而连不上本代理：');
-  console.log('     certutil -user -addstore Root "' + path.join(DIR, 'ca.crt') + '"');
-  console.log('     （装到「当前用户\受信任的根证书颁发机构」，不需要管理员，之后重启 Qoder）');
+  console.log('  → 首次使用要让系统信任这张 CA，否则 Qoder 会因证书校验失败连不上本代理。');
+  console.log('     在控制台「维护 → 环境状态」点「信任证书」即可（只需在 Windows 弹窗点「是」）。');
+  console.log('     等价的命令行：certutil -user -addstore Root "' + path.join(DIR, 'ca.crt') + '"');
 }
 
 const key = fs.readFileSync(path.join(DIR, 'leaf.key'));

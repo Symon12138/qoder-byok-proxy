@@ -163,4 +163,15 @@ export const detectIde = (root) =>
 export const proxyAction = (action) =>
   request('/api/proxy', { method: 'POST', body: { action } });
 
+// ==================== 证书 ====================
+export const getCert = () => request('/api/cert');
+
+/**
+ * 把 ca.crt 装进「当前用户 → 受信任的根证书颁发机构」。
+ * 不需要管理员，但 Windows 会弹一次安全警告，用户点「是」即可。
+ * certutil 可能等用户点完才返回，超时给足。
+ */
+export const trustCert = () =>
+  request('/api/trust-cert', { method: 'POST', body: {}, timeout: 180000 });
+
 export { ApiError };

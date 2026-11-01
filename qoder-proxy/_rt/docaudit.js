@@ -58,7 +58,7 @@ console.log('\n=== 6. 端点 ===');
 console.log('  代码里实际 ' + eps.length + ' 个 API 端点（README 未声称具体数量）');
 
 console.log('\n=== 7. FAQ ===');
-check('FAQ 条数', 17, (faqJs.match(/^  \{\n    q: '/gm) || []).length);
+check('FAQ 条数', 18, (faqJs.match(/^  \{\n    q: '/gm) || []).length);
 
 console.log('\n=== 8. 已删除内容不应出现在 README ===');
 check('无 P7 行', false, /\| P7 \|/.test(readme));

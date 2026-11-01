@@ -54,14 +54,14 @@ async function main() {
     // FAQ 条目数
     await L.goto(c, 'faq', 2800);
     const faq = await c.ev("document.querySelectorAll('details.faq-item').length");
-    check('FAQ 条目数', 17, faq);
+    check('FAQ 条目数', 18, faq);
     const steps = await c.ev("document.querySelectorAll('.step-item').length");
     check('快速开始步骤数', 4, steps);
 
     // 维护页环境状态徽章
     await L.goto(c, 'maintain', 2800);
     const badges = await c.ev("document.querySelectorAll('.kv-grid .badge').length");
-    check('维护页状态徽章数', 5, badges);
+    check('维护页状态徽章数', 6, badges);
 
     // 补丁页状态
     await L.goto(c, 'patches', 2800);
