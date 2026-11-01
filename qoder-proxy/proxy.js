@@ -719,8 +719,14 @@ function log(entry) {
 // When UPSTREAM_PROXY is configured (e.g. the account-switcher on 9940) traffic is
 // tunnelled through it; otherwise we connect directly — chaining to a proxy that is
 // not running used to fail every request with ECONNREFUSED.
+//
+// keepAlive 开着的理由：Qoder 每分钟会发若干后台请求（遥测、模型列表、更新检查），
+// 每个都重开 TLS 既慢又占 CPU。之前是 keepAlive:false，配合"把上游的 connection: close
+// 原样转给客户端"，导致连客户端那一侧也无法复用连接。上限给保守值，避免压垮源站。
 class UpstreamAgent extends https.Agent {
-  constructor(opts = {}) { super({ keepAlive: false, ...opts }); }
+  constructor(opts = {}) {
+    super({ keepAlive: true, keepAliveMsecs: 15000, maxSockets: 16, maxFreeSockets: 8, ...opts });
+  }
   createConnection(options, cb) {
     if (!UPSTREAM_PROXY) {
       const sock = tls.connect({ host: options.host, port: options.port || 443, servername: options.host, rejectUnauthorized: false });
@@ -768,6 +774,15 @@ function forward(req, res, bodyChunks) {
   const headers = { ...req.headers };
   const body = Buffer.concat(bodyChunks);
   if (body.length) headers['content-length'] = String(body.length);
+  // 逐跳头必须剥掉，不能原样转给上游：
+  //  - transfer-encoding: 我们在上面已经把 body 完整缓冲并按长度发送，若还带着
+  //    chunked，头部会同时出现 transfer-encoding 和 content-length（违反 RFC 7230，
+  //    部分服务器直接回 400）。
+  //  - connection / keep-alive: 连接复用由 Node 的 agent 决定。原样转发会把客户端的
+  //    "close" 传染给上游（反之亦然），实测表现为响应头一路 close、连接无法复用。
+  delete headers['transfer-encoding'];
+  delete headers['connection'];
+  delete headers['keep-alive'];
   delete headers['proxy-connection'];
 
   const modelSource = String(req.headers['x-model-source'] || '').toLowerCase();
@@ -815,7 +830,14 @@ function forward(req, res, bodyChunks) {
     host, port: 443, path: req.url, method: req.method, headers, agent,
   }, (upRes) => {
     log({ kind: 'response', id, status: upRes.statusCode, contentType: upRes.headers['content-type'] });
-    res.writeHead(upRes.statusCode, upRes.headers);
+    // 响应方向同样剥掉逐跳头：上游回的 connection/keep-alive 只描述"它和我们的连接"，
+    // 原样转给客户端会让客户端也断开（实测表现为 IDE 侧每请求重建连接）。
+    // transfer-encoding 保留，让下游分帧与上游一致。
+    const outHeaders = { ...upRes.headers };
+    delete outHeaders['connection'];
+    delete outHeaders['keep-alive'];
+    delete outHeaders['proxy-connection'];
+    res.writeHead(upRes.statusCode, outHeaders);
     const capture = /text\/event-stream/i.test(String(upRes.headers['content-type'] || '')) ||
       /agent_chat_generation/i.test(req.url || '');
     if (capture) {

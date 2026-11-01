@@ -250,6 +250,24 @@ _doRTgHZBKcGVjlvpC,@aFSx#DPuNJme&i*MzLOEn)sUrthbf%Y^w.(kIQyXqWA!
 
 **`$` 是填充符**（等价于 `=`），当成未知字符跳过会导致其后全部错位。
 
+## 透传转发：头部怎么处理
+
+MITM 的几个域名里，只有自定义模型请求会被接管；其余请求原样转发到源站。
+转发时对头部做了这些处理（都有实测依据）：
+
+| 动作 | 原因 |
+|---|---|
+| 删掉请求的 `transfer-encoding` | body 已经完整缓冲并按 `content-length` 发送，两个头同时出现违反 RFC 7230，部分服务器直接 400 |
+| 删掉请求/响应的 `connection`、`keep-alive` | 逐跳头只描述"相邻两跳"的连接。原样转发会把源站的 `Connection: close` 传染给 IDE，导致客户端也无法复用连接（实测受影响时响应头一路 close） |
+| 保留 `transfer-encoding`（响应方向） | 让下游分帧与源站一致 |
+| 其余头部原样透传 | 实测直连与经代理的响应头集合**完全一致**、零丢失零新增；`etag` / `cache-control` / `content-encoding` 语义不变 |
+
+上游 agent 开了 `keepAlive`（16 个并发、8 个空闲、15 秒心跳）：Qoder 每分钟会发若干后台请求，
+之前每次重开 TLS，现在复用。实测同一 host 连续 3 次请求，新建连接数 `1 0 0`，与直连一致。
+
+> 同理：**响应体一律 `pipe` 原始字节，不解压也不重压** —— 一旦重压，`etag` 就会失效，
+> 客户端缓存全部作废。
+
 ## 用户提问在哪（专家团 vs 普通对话）
 
 普通对话的 `messages` 里 user 条目带真实内容；**专家团的 `messages` 里 user 条目 content 全是空串**，
