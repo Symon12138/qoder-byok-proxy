@@ -39,11 +39,10 @@ Start-Sleep -Seconds 2
 Log 'qoder stopped'
 
 $steps = @(
-  @{ Name = 'byok-unlock';        File = 'patch-qoder-byok.ps1' },
-  @{ Name = 'baseurl';            File = 'patch-qoder-url.ps1' },
-  @{ Name = 'merge-model-fields'; File = 'patch-qoder-merge.ps1' },
-  @{ Name = 'live-model-name';    File = 'patch-qoder-live-model.ps1' },
-  @{ Name = 'live-name-fix';      File = 'fix-qoder-live-patch.ps1' },
+  # The old patch-qoder-*.ps1 generation (byok-unlock / baseurl / merge-model-fields /
+  # live-model-name / live-name-fix) is fully superseded by the 8 patches inside
+  # experts-patch.js, and those scripts do not live in this project. Keeping them
+  # listed here only produced one SKIP line per run.
   @{ Name = 'experts';           File = 'run-experts-patch.ps1' },
   @{ Name = 'checksums';          File = 'fix-qoder-checksums.ps1' }
 )
