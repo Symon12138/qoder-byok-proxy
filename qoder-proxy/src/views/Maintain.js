@@ -202,26 +202,17 @@ export default {
           await actions.loadStatus();
           toast.success('已重置引导标记，「状态概览」会重新显示引导卡');
         } else if (act === 'trust-cert') {
-          lock('等待确认…');
+          // 同步等待：弹窗里点完「是」请求才返回，期间按钮保持禁用并显示等待状态。
+          // 失败就再点一次，不保留任何中间状态。
+          lock('等待确认…（请在弹窗点「是」）');
           try {
             const r = await api.trustCert();
-            if (r.already) {
-              await actions.loadStatus();
-              toast.success('证书已在受信任根里，无需重复安装');
-            } else {
-              // 弹窗等用户点「是」，这里轮询到装好为止（最多约 3 分钟）
-              let trusted = false;
-              for (let i = 0; i < 90; i++) {
-                await new Promise((res) => setTimeout(res, 2000));
-                const c = await api.getCert();
-                if (c.trusted) { trusted = true; break; }
-              }
-              await actions.loadStatus();
-              if (trusted) toast.success('证书已信任，重启 Qoder 后生效');
-              else toast.warning('没检测到信任完成。若弹窗被关掉，可再点一次「信任证书」');
-            }
+            await actions.loadStatus();
+            if (r.already) toast.success('证书已在受信任根里，无需重复安装');
+            else toast.success(`证书已信任（${r.seconds}s），重启 Qoder 后生效`);
           } catch (err) {
-            toast.error(err.message || '安装证书失败');
+            await actions.loadStatus();
+            toast.error(err.message || '安装证书失败，可重试');
           }
         } else if (act === 'export') {
           lock('导出中…');

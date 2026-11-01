@@ -313,23 +313,15 @@ export default {
         } else if (act === 'trust-cert') {
           el.disabled = true;
           const origLabel = el.innerHTML;
-          el.innerHTML = '等待确认…';
+          el.innerHTML = '等待确认…（请在弹窗点「是」）';
           try {
             const r = await api.trustCert();
-            if (r.already) {
-              await actions.loadStatus();
-              toast.success('证书已在受信任根里');
-            } else {
-              let trusted = false;
-              for (let i = 0; i < 90; i++) {
-                await new Promise((res) => setTimeout(res, 2000));
-                const c = await api.getCert();
-                if (c.trusted) { trusted = true; break; }
-              }
-              await actions.loadStatus();
-              if (trusted) toast.success('证书已信任，重启 Qoder 后生效');
-              else toast.warning('没检测到信任完成，可在「维护」页重试');
-            }
+            await actions.loadStatus();
+            if (r.already) toast.success('证书已在受信任根里');
+            else toast.success(`证书已信任（${r.seconds}s），重启 Qoder 后生效`);
+          } catch (err) {
+            await actions.loadStatus();
+            toast.error(err.message || '安装证书失败，可重试');
           } finally {
             el.disabled = false;
             el.innerHTML = origLabel;

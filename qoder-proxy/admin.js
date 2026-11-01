@@ -111,17 +111,13 @@ function resolveIdeRoot(force) {
  * 不看输出文本 —— 它的输出是 GBK，跨编码解析不可靠。
  * 指纹用 Node 自带 X509Certificate 算，不依赖 openssl。
  */
-// 正在等待用户确认的证书安装任务（见 /api/trust-cert）
-let trustJob = null;
-
 // 证书状态缓存：查询要起 certutil 进程（约 0.15s），而 /api/status 每 5 秒被轮询一次，
-// 每次都 spawn 一次纯属浪费，还会阻塞 0.15s 事件循环。缓存 20 秒；
-// 正在安装证书时（trustJob 存在）绕过缓存，保证轮询能立刻看到结果。
+// 每次都 spawn 一次纯属浪费，还会阻塞 0.15s 事件循环。缓存 20 秒。
 let certCache = { at: 0, info: null };
 const CERT_TTL = 20000;
 
 function certInfo(force) {
-  const fresh = force || trustJob || !certCache.info || Date.now() - certCache.at > CERT_TTL;
+  const fresh = force || !certCache.info || Date.now() - certCache.at > CERT_TTL;
   if (!fresh) return certCache.info;
   const info = computeCertInfo();
   certCache = { at: Date.now(), info };
@@ -139,7 +135,6 @@ function computeCertInfo() {
     const r = spawnSync('certutil', ['-user', '-store', 'Root', thumb], {
       encoding: 'utf8', windowsHide: true, timeout: 15000,
     });
-    if (r.status === 0) trustJob = null;   // 装好了就结束轮询状态，恢复正常缓存
     return {
       ok: true,
       exists: true,
@@ -908,28 +903,30 @@ const server = http.createServer(async (req, res) => {
   }
   // 把 ca.crt 装进「当前用户 → 受信任的根证书颁发机构」。
   //
-  // 这里**故意不用 spawnSync**：certutil 会弹一个「安全警告」对话框等用户点「是」，
-  // 用户不点就一直不返回。同步执行会把整个控制台卡死（状态轮询、页面操作全停），
-  // 和之前 pick-folder 那个坑是同一类。所以改成后台起进程、立刻返回，
-  // 由前端轮询 /api/cert 直到 trusted 变 true。
+  // 同步执行（spawnSync）：certutil 会弹「安全警告」框等用户点「是」，点完才返回。
+  // 期间控制台的主线程被占住、其它请求排队 —— 这是刻意接受的代价：
+  // 一次点击 = 一次完整尝试，结果直接返回，失败就再点一次，没有"后台任务"这种中间状态。
+  // （异步版要轮询、要处理残留任务，反而更难重新操作。）
   if (url.pathname === '/api/trust-cert' && req.method === 'POST') {
-    const before = certInfo();
+    const before = certInfo(true);
     if (!before.exists) return send(400, { ok: false, error: 'ca.crt 不存在，请先启动代理（会自动生成证书）' });
-    if (before.trusted) return send(200, { ok: true, already: true, cert: before });
-    if (trustJob && Date.now() - trustJob.startedAt < 300000) {
-      return send(200, { ok: true, pending: true, note: '已在等待你在弹窗中确认' });
-    }
-    try {
-      const child = spawn('certutil', ['-user', '-addstore', 'Root', before.path], {
-        detached: true, stdio: 'ignore', windowsHide: false,
-      });
-      child.unref();
-      trustJob = { pid: child.pid, startedAt: Date.now() };
-      console.log('[cert] trust started, pid=' + child.pid);
-      return send(200, { ok: true, pending: true });
-    } catch (e) {
-      return send(500, { ok: false, error: '无法启动 certutil：' + e.message });
-    }
+    if (before.trusted) return send(200, { ok: true, already: true, trusted: true, cert: before });
+
+    const t0 = Date.now();
+    const r = spawnSync('certutil', ['-user', '-addstore', 'Root', before.path], {
+      encoding: 'utf8', windowsHide: false, timeout: 300000,
+    });
+    const after = certInfo(true);
+    const seconds = Math.round((Date.now() - t0) / 100) / 10;
+    if (after.trusted) return send(200, { ok: true, trusted: true, seconds, cert: after });
+
+    const detail = ((r.stderr || '') + (r.stdout || '')).trim().split('\n').slice(-2).join(' ');
+    return send(500, {
+      ok: false,
+      error: '证书未装上：' + (detail || (r.error ? r.error.message : 'certutil 未返回成功，可能是弹窗里选了「否」')),
+      seconds,
+      cert: after,
+    });
   }
   if (url.pathname === '/api/ide-proxy' && req.method === 'POST') {
       const { port } = await body();
