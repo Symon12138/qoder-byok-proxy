@@ -740,7 +740,7 @@ certutil -user -addstore Root "<项目路径>\qoder-proxy\ca.crt"
 ## 补丁清单（experts-patch.js）
 
 移植自 [wqzhellohhwy/qoder-experts-enable](https://github.com/wqzhellohhwy/qoder-experts-enable)，
-并针对本版本做了重构与扩展。**10 条，每条独立生效、互不依赖**（早期的 P8/P10/P11 是对其他补丁产物的
+并针对本版本做了重构与扩展。**8 条，每条独立生效、互不依赖**（早期的 P8/P10/P11 是对其他补丁产物的
 二次改写，已删除；场景集合改为在生成时就写死）。
 
 | 补丁 | 作用 | 可否关 |
@@ -774,6 +774,29 @@ node E:\Project\AI\dsh\qoder-byok\experts-patch.js --skip=P12         # 跳过�
 早期写死 `un.EXPERTS` 曾导致某次更新后合并判断恒为 false、补丁静默失效。
 
 补丁开关在控制台「补丁项」里按功能给出（`experts` / `repowiki`），见上文「补丁开关：按功能，不按编号」。
+
+### 锚点不能写死压缩变量名（重装/升级后必查）
+
+Qoder 每次构建都会重新分配压缩变量名，**同一个逻辑位置，这次叫 `Q`，下次可能叫 `Y`**。
+补丁的正则如果把这个字母写死，就会静默失效 —— `find` 匹配不到，脚本既不报错也不应用，
+而控制台的"已应用"判定如果同样写死，还会显示成已应用（更难发现）。
+
+2026-11-01 重装 1.106.3 时就踩到了，两条补丁失效：
+
+| 补丁 | 失效原因 | 加固后 |
+|---|---|---|
+| P4 | 正则写死 `Q.userPlan`，新构建变成 `Y.userPlan` | 用捕获组回引：`(\w+)\.userPlan\?\.user_type,\1\.userInfo,…` |
+| P13 | 函数体重构了：新版先把列表存进局部变量，还多了一道 `isBlockedExpertsModel` 门控 | 改用区间匹配 `isModelConfigAvailable\(\w+,\w+\)\{[^}]*?_isDisabledByStrategy\(\w+\)\)\}`，在末尾追加 `\|\|this._isCustomModelExists(x)` |
+
+同时把控制台 `admin.js` 的 `PATCH_FIND` 与产物标记一起改了（`bundleMarkers` 现在支持正则），
+两边判定口径必须一致，否则会出现"补丁脚本说打了、控制台说没打"。
+
+**排查办法**：拿补丁前的原始 bundle 跑 dry-run —— 每条都应当"待应用"；
+若某条是"0 处 未找到/已应用"，而它确实还没打过，就是锚点失效了。
+
+```bash
+node experts-patch.js --dry --root <放有原始 bundle 的临时目录>
+```
 
 ### 关键坑（实测）
 

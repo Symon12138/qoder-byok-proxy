@@ -247,7 +247,8 @@ function bundleMarkers(file, markers) {
   let results;
   try {
     const t = fs.readFileSync(file, 'utf8');
-    results = markers.map((m) => ({ marker: m, ok: t.includes(m) }));
+    // marker 可以是字符串，也可以是正则（产物里的压缩变量名不固定时用正则）
+    results = markers.map((m) => ({ marker: m, ok: m instanceof RegExp ? m.test(t) : t.includes(m) }));
   } catch {
     results = markers.map((m) => ({ marker: m, ok: false }));
   }
@@ -283,12 +284,15 @@ const KEY_MAP = Object.fromEntries(PATCH_IDS.filter((p) => p.key).map((p) => [p.
 // 匹配不到原始锚点 = 已应用（这样两条路径不会给出互相矛盾的结论）。
 const PATCH_FIND = {
   P1: /_isCustomModelExists\((\w+)\)\{const (\w+)=(\w+)\(\1\);return \2\?this\.customModelService\.getModels\(\)\.records\.some\((\w+)=>\4\.id===\2&&\4\.visible\):!1\}/g,
-  P4: /useMemo\)\(\(\)=>!\w+\(Q\.userPlan\?\.user_type,Q\.userInfo,Q\.userPlan\?\.is_personal_version\)\|\|(\w+),\[Q\.userPlan,Q\.userInfo,\1\]\)/g,
+  // P4/P13 的锚点不能写死压缩变量名：Qoder 每次构建都可能改（见过 Q→Y），
+  // 写了就会"匹配不到 → 被误判成已应用"。改成捕获组回引，与 experts-patch.js 保持一致。
+  P4: /useMemo\)\(\(\)=>!\w+\((\w+)\.userPlan\?\.user_type,\1\.userInfo,\1\.userPlan\?\.is_personal_version\)\|\|(\w+),\[\1\.userPlan,\1\.userInfo,\2\]\)/g,
   P5a: /(\w+)=\(0,(\w+)\.useMemo\)\(\(\)=>(\w+)\?\[\]:(\w+)\.filter\((\w+)\),\[\3,\4\]\)/g,
   P5b: /(\w+)=!c&&\(!(\w+)\|\|(\w+)\)/g,
   P5c: /(\w+)=\(0,(\w+)\.useMemo\)\(\(\)=>(\w+)\?"experts-auto":(\w+),\[(\w+),(\w+)\]\)/g,
   P6: /(\w+)=!c&&(\w+)\((\w+)\);(?=!\w+\.some\()/g,
-  P13: /isModelConfigAvailable\((\w+),(\w+)\)\{return\(await this\.getAvailableModelConfigs\(\2\)\)\.some\((\w+)=>\(?\3\)?\.name===\1&&\3\.enabled&&!this\._isDisabledByStrategy\(\3\)\)\|\|this\._areEnterpriseModelsEnabled\(\)&&this\._enterpriseModelConfigs\.some\((\w+)=>\(?\4\)?\.name===\1&&\4\.enabled&&!this\._isDisabledByStrategy\(\4\)\)\}/g,
+  // 新旧两种写法都认：旧版直接 return(await ...)，新版先存局部变量并多一道 isBlockedExpertsModel
+  P13: /isModelConfigAvailable\((\w+),(\w+)\)\{[^}]*?_isDisabledByStrategy\(\w+\)\)\}/g,
   P12: /static shouldShowCommercialMessage\((\w+),(\w+)\)\{(?!return!1)/g,
 };
 
@@ -318,8 +322,9 @@ function patchApplied(id) {
 
 function patchStatus() {
   const byok = bundleMarkers(bundleWb(), ['_applyByokRemoteEnabledFromResponse(e){const r=!0;', 'checkByokConfig(e,r){return{success:!0};']);
-  // P4 的产物：experts 模式 BYOK 门控被解除（自定义模型改由 Qoder 原生「自定义」分组承载）
-  const experts = bundleMarkers(bundleAw(), ['useMemo)(()=>!1,[Q.userPlan,Q.userInfo,']);
+  // P4 的产物：experts 模式 BYOK 门控被解除（自定义模型改由 Qoder 原生「自定义」分组承载）。
+  // 用正则而不是固定字符串：产物里的对象名随构建变化（Q / Y 都见过）。
+  const experts = bundleMarkers(bundleAw(), [/useMemo\)\(\(\)=>!1,\[\w+\.userPlan,\w+\.userInfo,\w+\]\)/]);
   const live = bundleMarkers(bundleWb(), ['_lm=this;setInterval']);
   // P12：RepoWiki 商业门控被去掉
   const repowiki = bundleMarkers(bundleWb(), ['shouldShowCommercialMessage(t,e){return!1;']);

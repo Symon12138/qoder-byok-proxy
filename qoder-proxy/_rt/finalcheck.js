@@ -54,7 +54,7 @@ async function main() {
     // FAQ 条目数
     await L.goto(c, 'faq', 2800);
     const faq = await c.ev("document.querySelectorAll('details.faq-item').length");
-    check('FAQ 条目数', 18, faq);
+    check('FAQ 条目数', 19, faq);
     const steps = await c.ev("document.querySelectorAll('.step-item').length");
     check('快速开始步骤数', 4, steps);
 

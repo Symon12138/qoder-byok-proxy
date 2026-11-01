@@ -51,8 +51,10 @@ const ALL_PATCHES = [
   {
     id: 'P4',
     desc: '解除 experts 模式 BYOK 门控',
-    find: /useMemo\)\(\(\)=>!\w+\(Q\.userPlan\?\.user_type,Q\.userInfo,Q\.userPlan\?\.is_personal_version\)\|\|(\w+),\[Q\.userPlan,Q\.userInfo,\1\]\)/g,
-    repl: (_m, c) => `useMemo)(()=>!1,[Q.userPlan,Q.userInfo,${c}])`,
+    // 变量名（这里是 userPlan 所在的对象）随构建变化，Q/Y 都见过，
+    // 所以用捕获组回引，别再写死字母。
+    find: /useMemo\)\(\(\)=>!\w+\((\w+)\.userPlan\?\.user_type,\1\.userInfo,\1\.userPlan\?\.is_personal_version\)\|\|(\w+),\[\1\.userPlan,\1\.userInfo,\2\]\)/g,
+    repl: (_m, v, c) => `useMemo)(()=>!1,[${v}.userPlan,${v}.userInfo,${c}])`,
   },
   {
     id: 'P5a',
@@ -84,11 +86,15 @@ const ALL_PATCHES = [
     // 原始实现只看官方可用列表和企业模型，不看 customModelService。
     // 结果：用户信息加载完 -> _handleUserInfoChange -> isModelConfigAvailable=false
     // -> setModelConfig(默认模型)，把用户选的自定义模型覆盖掉。
-    find: /isModelConfigAvailable\((\w+),(\w+)\)\{return\(await this\.getAvailableModelConfigs\(\2\)\)\.some\((\w+)=>\(?\3\)?\.name===\1&&\3\.enabled&&!this\._isDisabledByStrategy\(\3\)\)\|\|this\._areEnterpriseModelsEnabled\(\)&&this\._enterpriseModelConfigs\.some\((\w+)=>\(?\4\)?\.name===\1&&\4\.enabled&&!this\._isDisabledByStrategy\(\4\)\)\}/g,
-    repl: (_m, e, r, i, j) =>
-      `isModelConfigAvailable(${e},${r}){return(await this.getAvailableModelConfigs(${r})).some(${i}=>${i}.name===${e}&&${i}.enabled&&!this._isDisabledByStrategy(${i}))` +
-      `||this._areEnterpriseModelsEnabled()&&this._enterpriseModelConfigs.some(${j}=>${j}.name===${e}&&${j}.enabled&&!this._isDisabledByStrategy(${j}))` +
-      `||this._isCustomModelExists(${e})}`,
+    //
+    // 两种写法都要认（都出现过）：
+    //   旧：return(await this.getAvailableModelConfigs(r)).some(...)||...
+    //   新：const n=await this.getAvailableModelConfigs(r);return this.isBlockedExpertsModel(...)?!1:n.some(...)||...
+    // 函数体里没有花括号，所以 [^}]*? 能安全地吃到函数结尾；
+    // 已打过时结尾变成 ...||this._isCustomModelExists(e)}，不再命中，天然幂等。
+    // 追加在最外层 return 表达式末尾：blocked?!1:(A||B||custom)，优先级正确。
+    find: /isModelConfigAvailable\((\w+),(\w+)\)\{([^}]*?_isDisabledByStrategy\(\w+\)\))\}/g,
+    repl: (_m, model, type, body) => `isModelConfigAvailable(${model},${type}){${body}||this._isCustomModelExists(${model})}`,
   },
   {
     id: 'P12',
