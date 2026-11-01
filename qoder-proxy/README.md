@@ -101,6 +101,29 @@ Qoder IDE ──http.proxy──> 127.0.0.1:8788 (本代理)
 上游收到 `user-agent: Go-http-client/1.1`、`x-qoder-client: Qoder-IDE`、
 `x-qoder-version: 1.38.0`、`x-qoder-proxy: byok`、`x-request-id: probe-...`。
 
+### magpie 侧显示成 Qoder，而不是 Go-http-client
+
+magpie 判定一次调用属于哪个 agent，优先级是（`internal/gateway/gateway.go` 的 `agentOf`）：
+
+1. **bearer token 的后缀**：`TokenFor(agent) = "magpie-" + agent`，即 `Authorization: Bearer magpie-qoder` → agent 记成 `qoder`
+2. 否则按 `User-Agent` 匹配已知 agent
+
+Qoder 的 UA 是 `Go-http-client/1.1`，而 magpie 的 `libraries` 表把 `go-http-client` 归为"HTTP 库"，
+**不算 agent** —— 所以只发通用 token `magpie` 时，用量里会记成 `agent=Go-http-client`，界面上没有 agent 名字。
+
+处理：代理发往上游的 token 走 `upstreamToken()`，把 `magpie` 换成 `magpie-qoder`
+（已经是 `magpie-xxx` 的原样保留，`sk-…` 这类真实第三方 key 完全不动）。
+顺带加的 `x-qoder-client` 等头是给人看的，magpie 不读它们。
+
+实测 `~/.config/magpie/usage.jsonl`：
+
+```
+改前: agent=Go-http-client    model=cn:minimax-m3.1-flash
+改后: agent=qoder             model=cn:minimax-m3.1-flash
+```
+
+> 历史记录不会改：改动之前产生的调用仍然记在 `Go-http-client` 名下。
+
 ## 模型记录同步
 
 网关的 `/v1/models` 返回每个模型的 `display_name`、`max_input_tokens`、`max_output_tokens`、`modalities`、`reasoning_levels`、`tool_call`。

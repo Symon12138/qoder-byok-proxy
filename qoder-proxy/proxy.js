@@ -506,6 +506,19 @@ function dumpWikiSample(sample) {
   } catch { /* ignore */ }
 }
 
+// magpie 用 bearer token 的后缀认 agent：TokenFor(agent) = "magpie-" + agent。
+// 只发通用 token "magpie" 时，它只能退回按 User-Agent 判定；而 Qoder 的 UA 是
+// Go-http-client/1.1，magpie 把这类 HTTP 库排除在 agent 之外（libraries 表），
+// 于是 usage 里记成 "Go-http-client"、界面上看不到 agent 名字。
+// 带上 -qoder 后缀后，magpie 的 agentOf() 会直接认出是 qoder。
+// 真正的第三方 key（sk-… 之类）不含 magpie 前缀，原样发送，不受影响。
+function upstreamToken(key) {
+  const k = String(key || '').trim();
+  if (k === 'magpie') return 'magpie-qoder';
+  if (k.startsWith('magpie-')) return k; // 已经指名了 agent，别覆盖
+  return k;
+}
+
 function serveCustomModel(req, res, decodedText, cfg, rawBody) {
   const up = (cfg && cfg.upstream) || CONFIG.upstream;
   // 按请求隔离采样（wiki 会并发发多个请求，用全局会串扰）
@@ -610,7 +623,7 @@ function serveCustomModel(req, res, decodedText, cfg, rawBody) {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      authorization: 'Bearer ' + up.apiKey,
+      authorization: 'Bearer ' + upstreamToken(up.apiKey),
       accept: 'text/event-stream',
       // 让上游知道请求从哪来。Qoder 原始请求带着 user-agent / cosy-version /
       // x-request-id，我们以前一个都没转发，网关那边看起来就像"某个匿名脚本"。
