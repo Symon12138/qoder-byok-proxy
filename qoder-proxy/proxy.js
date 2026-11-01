@@ -74,6 +74,19 @@ function pruneBodies() {
 }
 setTimeout(pruneBodies, 5000);
 
+// 证书：新克隆的仓库里没有私钥，缺了就现场生成一套（见 certs.js）
+const certStatus = require('./certs').ensureCerts(DIR);
+if (!certStatus.ok) {
+  console.error('\n[proxy] ' + certStatus.error + '\n');
+  process.exit(1);
+}
+if (certStatus.created) {
+  console.log('certificates generated: ' + path.join(DIR, 'ca.crt'));
+  console.log('  → 首次使用需要让系统信任这张 CA，否则 Qoder 会因证书校验失败而连不上本代理：');
+  console.log('     certutil -user -addstore Root "' + path.join(DIR, 'ca.crt') + '"');
+  console.log('     （装到「当前用户\受信任的根证书颁发机构」，不需要管理员，之后重启 Qoder）');
+}
+
 const key = fs.readFileSync(path.join(DIR, 'leaf.key'));
 const cert = fs.readFileSync(path.join(DIR, 'leaf.crt'));
 const secureContext = tls.createSecureContext({ key, cert });

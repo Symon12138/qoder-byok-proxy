@@ -546,17 +546,47 @@ node E:\Project\AI\dsh\qoder-byok\qoder-proxy\proxy.js
 它会正确地把 `http.proxy` 删掉并清掉 BYOK 记录（不要手动改成某个别的地址——早期文档里的 9940
 是已不存在的端口，改过去会直接断网）。
 
-## 证书信任（不用装 CA）
+## 证书信任（必须做，否则 Qoder 连不上代理）
 
-Qoder IDE 支持 `~/.qoder/argv.json`，加一行即可让 IDE 跳过证书校验，**不需要往系统根证书区装 CA**：
+代理要给 `api3.qoder.sh` 出示自己签的证书，Qoder 必须认这张 CA。两种方式，任选一种：
 
-```jsonc
-{
-  "ignore-certificate-errors": true
-}
+**方式 A：把 CA 装进「当前用户 → 受信任的根证书颁发机构」**（推荐，本机用的就是这个）
+
+```powershell
+certutil -user -addstore Root "<项目路径>\qoder-proxy\ca.crt"
 ```
 
-已在本机写入。改完重启 IDE 生效；回滚删掉这一行即可。
+`-user` 表示只影响当前用户，**不需要管理员**。装完重启 Qoder。
+撤销：`certutil -user -delstore Root 1034786A13430FE942B45AE6A76655ED7A3FE7D8`（指纹用 `certutil -user -store Root | findstr Qoder` 查）。
+
+**方式 B：让 Qoder 跳过证书校验**
+
+编辑 `%USERPROFILE%\.qoder\argv.json`，加一行 `"ignore-certificate-errors": true`，重启 IDE。
+
+⚠️ 两个坑（都是实测踩到的）：
+
+- **argv.json 会被 Qoder 重写**。本机就发生过：曾经写过这一行，后来 Qoder 自己刷新 argv.json
+  （写 crash-reporter-id 之类）时把它丢了 —— 所以别假设"写过一次就永久有效"，
+  怀疑证书问题时先打开看一眼现在还在不在。
+- 早期版本的这份文档写着「不需要往系统根证书区装 CA」，**那是错的**。本机实际生效的是方式 A
+  （CA 确实在 `Cert:\CurrentUser\Root` 里），argv.json 里当前没有那一行。
+
+## 新环境部署（从 clone 到能用）
+
+克隆下来只有 67 个源码文件，下面这些必须由本机补齐 —— 前两项代理启动时**会自动处理**：
+
+| # | 需要什么 | 谁负责 |
+|---|---|---|
+| 1 | `ca.key` / `leaf.key` / 两个证书 | **自动**：首次启动代理时用 openssl 现场生成（缺了会提示装 Git for Windows） |
+| 2 | `bodies/` 采样目录 | **自动**：启动时 `mkdir -p` |
+| 3 | CA 被系统信任 | 手动：`certutil -user -addstore Root ...` 或 argv.json（见上一节） |
+| 4 | `config.json`（上游地址 / API Key / 模型） | 手动：没有也能启动，控制台会走首次引导，填完即生效 |
+| 5 | Qoder IDE 本体 | 手动：装好即可，控制台会自动探测安装目录 |
+| 6 | 管理员权限 | 手动：仅在「应用补丁 / 回滚」时需要（改 bundle 与 checksum） |
+| 7 | `_qoder_byok_backup/` | 可选：只有 revert 的反向替换失效时才会拿它兜底 |
+
+一句话概括：**clone → 装 Git for Windows（提供 openssl）→ 起代理（自动生成证书）→
+信任 CA → 起控制台填上游 → 应用补丁（管理员）→ 让 IDE 走代理 → 重启 Qoder**。
 
 ## 自动更新（Qoder 会强制重置，注意）
 
