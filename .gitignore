@@ -10,7 +10,11 @@
 !/fix-qoder-checksums.ps1
 !/sync-qoder-model.ps1
 !/mitm-test.js
-!/QODER-BYOK-PATCH.md
+!/patch-qoder-byok.ps1
+!/patch-qoder-url.ps1
+!/patch-qoder-merge.ps1
+!/patch-qoder-live-model.ps1
+!/fix-qoder-live-patch.ps1!/QODER-BYOK-PATCH.md
 !/qoder-proxy/
 
 # ---- qoder-proxy 内部再排除 ----
