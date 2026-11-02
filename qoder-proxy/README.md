@@ -167,6 +167,28 @@ node _rt/cacheaudit.js
 已经确认过的事实：`extractMessages` 只做字段映射（`contents[]` → 文本、保留 tool_calls），
 不改写内容、不重排、不加时间戳之类的东西，所以发给上游的提示词与 Qoder 直连时等价。
 
+## 排查运行日志（哪些错误跟本项目有关）
+
+```bash
+node _rt/logaudit.js            # 最近 6 个会话
+node _rt/logaudit.js 12 --full  # 更多会话，并打印每类的原文样本
+```
+
+它扫 `%APPDATA%\Qoder\logs`，把 error/warning 归一化之后聚合成"类"，再按已知模式标注归属：
+
+| 标注 | 含义 | 典型消息 |
+|---|---|---|
+| ⚠ 与本项目有关 | 代理没在跑 | `ERR_PROXY_CONNECTION_FAILED`、`Failed to establish a socket connection to proxies 127.0.0.1:8788` |
+| ⚠ 与本项目有关 | 同上，拿不到模型列表 | `no model config found`（重试 4 次后 `refreshModelConfigs invalid`） |
+| ✓ 无关 | 客户端 DNS | `getaddrinfo ENOTFOUND` |
+| ✓ 无关 | VS Code 组件自身 | `TreeError [DebugRepl] Tree input not set` |
+| ✓ 无关 | 扩展自带翻译缺失 | `no string found in i18n bundle` |
+| ✓ 无关 | 扩展市场（直连，不在 MITM 列表） | `Failed to fetch`（marketplace / controlUrl.json） |
+| ✓ 无关 | Qoder Agent 内部 | `no waiting tool call` —— 与工具注入无强相关，原生工具集下同样会报 |
+
+2026-11-02 实测（6 个会话、231 个日志文件、780 行 error）：**只有两类、共 87 次与我们有关**，
+且全部集中在"机器重启后、服务还没起来"的那段窗口 —— 说明问题不在代理本身，而在于**服务不会自启**。
+
 ## 模型记录同步
 
 网关的 `/v1/models` 返回每个模型的 `display_name`、`max_input_tokens`、`max_output_tokens`、`modalities`、`reasoning_levels`、`tool_call`。
@@ -612,7 +634,8 @@ qoder-byok/
    ├─ docs/
    │  └─ 开发历程与问题记录.md   方向选择、问题台账、验证方法学（回看用）
    ├─ _rt/                   回归脚手架：lib + p1~p4 + 多上游 + 文档一致性 + 界面冒烟
-│                          + cacheaudit（缓存命中率诊断）+ stub_headers（回显假上游）
+│                          + cacheaudit（缓存命中率诊断）+ logaudit（运行日志归类）
+│                          + stub_headers（回显假上游）
    └─ _regress/              历史回归产物（截图/JSON，不入库）
 ```
 
