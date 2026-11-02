@@ -14,7 +14,10 @@
 !/patch-qoder-url.ps1
 !/patch-qoder-merge.ps1
 !/patch-qoder-live-model.ps1
-!/fix-qoder-live-patch.ps1!/QODER-BYOK-PATCH.md
+!/fix-qoder-live-patch.ps1
+!/QODER-BYOK-PATCH.md
+!/start.ps1
+!/start.cmd
 !/qoder-proxy/
 
 # ---- qoder-proxy 内部再排除 ----

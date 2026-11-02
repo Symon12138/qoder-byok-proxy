@@ -574,7 +574,14 @@ qoder-byok/
 ├─ fix-qoder-checksums.ps1   修 product.json / featureFlags.json 的校验和
 ├─ sync-qoder-model.ps1      把网关模型能力写进 Qoder 的 sqlite 模型记录
 ├─ run-experts-patch.ps1     apply-all 的中间层：找 node、读配置
+├─ patch-qoder-byok.ps1      老一代补丁：解除 remote-enable 门控（byok 标记就靠它）
+├─ patch-qoder-url.ps1       老一代补丁：把 baseurl 指向本地代理
+├─ patch-qoder-merge.ps1     老一代补丁：合并模型记录字段
+├─ patch-qoder-live-model.ps1 老一代补丁：实时模型名（live 标记）
+├─ fix-qoder-live-patch.ps1  上面那条的收尾修正；apply-all 第 5 步会调它
 ├─ mitm-test.js              不经 IDE 的端到端自测：构真实请求 → 隧道 → 解析 SSE
+├─ start.ps1                 一键启动/停止/查状态；只起服务，不动 Qoder 配置（带 BOM 的 UTF-8）
+├─ start.cmd                 双击入口，转调 start.ps1
 ├─ QODER-BYOK-PATCH.md       早期"解锁 Qoder 自带 BYOK"方案的记录（已被取代）
 ├─ .gitignore                白名单式（先忽略全部，再逐个放行）
 └─ qoder-proxy/
@@ -643,17 +650,31 @@ qoder-byok/
 
 ## 启动
 
-```powershell
-# 1. 起代理
-node E:\Project\AI\dsh\qoder-byok\qoder-proxy\proxy.js
+**双击 `start.cmd`** 就能把两个服务都拉起来；也可以命令行调用：
 
-# 2. 让 IDE 走代理（IDE 设置 → 高级 → 代理 → 手动 → http://127.0.0.1:8788，
-#    或直接改 %APPDATA%\Qoder\User\settings.json 里的 "http.proxy"）
+```powershell
+powershell -ExecutionPolicy Bypass -File start.ps1           # 启动（幂等：已在跑就跳过）
+powershell -ExecutionPolicy Bypass -File start.ps1 -Status   # 只看状态
+powershell -ExecutionPolicy Bypass -File start.ps1 -Stop     # 停止
+powershell -ExecutionPolicy Bypass -File start.ps1 -Open     # 启动并打开控制台
 ```
 
-重启 IDE 生效。**代理不运行时 IDE 会断网**，所以停用时应走「退出服务」或「恢复原始（不设代理）」，
-它会正确地把 `http.proxy` 删掉并清掉 BYOK 记录（不要手动改成某个别的地址——早期文档里的 9940
-是已不存在的端口，改过去会直接断网）。
+它只负责起两个后台服务，不改 Qoder 的任何配置：
+
+| 服务 | 端口 | 作用 |
+|---|---|---|
+| 控制台 `admin.js` | 3426 | 网页界面、配置、补丁开关 |
+| 代理 `proxy.js` | 8788 | MITM 转发 |
+
+启动失败会打印各自的错误日志（在 `_start_logs/`）并返回非零退出码。
+
+> `start.ps1` 是**带 BOM 的 UTF-8**：PowerShell 5.1 按 ANSI 读无 BOM 的文件，中文会乱码甚至解析失败。
+> 它由 `start.cmd` 用 `powershell.exe` 调用，所以这个 BOM 不能删。
+> 双击（无参数）时窗口会停住等按键，方便看输出；带参数调用（自动化）不会停。
+
+让 IDE 走代理请用控制台的「IDE 走代理」或初始化里的那一步，**不要手工填别的地址**。
+**代理不运行时 IDE 会断网**，所以停用时应走「退出服务」或「恢复原始（不设代理）」，
+它会正确地把 `http.proxy` 删掉并清掉 BYOK 记录（早期文档里的 9940 是已不存在的端口，改过去会直接断网）。
 
 ## 证书信任（必须做，否则 Qoder 连不上代理）
 
