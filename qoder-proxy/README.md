@@ -634,6 +634,18 @@ qoder-byok/
 | 启动时的工作目录（`cwd`） | 代码里**没有一处** `process.cwd()`；配置、日志、采样、证书全部按 `__dirname` 定位 |
 | 脚本里的绝对路径 | `.ps1` 用 `$PSScriptRoot`，`.js` 用 `__dirname`，不再写死盘符 |
 
+**改完记得自查一次，下面这条应当没有任何输出：**
+
+```powershell
+cd qoder-byok
+Select-String -Path *.ps1, *.js, qoder-proxy\*.js, qoder-proxy\*.ps1 -Pattern 'E:\\Project'
+```
+
+> 2026-11-02 就是靠它查出 `admin.js` 里的 4 处回退：后来新增的 `/api/apply`、`/api/apply-status`、
+> `/api/revert`、`/api/revert-status` 把日志路径又写死成了 `E:\Project\AI\dsh\...`。
+> 项目搬到子目录后，这些接口永远读不到日志，界面上「应用/回滚进度」一直是空的。
+> 已统一改成 `path.join(DIR, '..', ...)`。
+
 实测（把服务的工作目录设成 `C:\` 后启动）：
 
 ```

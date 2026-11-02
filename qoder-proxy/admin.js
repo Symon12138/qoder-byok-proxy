@@ -977,7 +977,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/revert' && req.method === 'POST') {
       const script = path.join(DIR, '..', 'revert-all.ps1');
       if (!fs.existsSync(script)) return send(500, { ok: false, error: 'revert-all.ps1 不存在' });
-      const logFile = 'E:\\Project\\AI\\dsh\\_revert_all_log.txt';
+      const logFile = path.join(DIR, '..', '_revert_all_log.txt');
       try { fs.unlinkSync(logFile); } catch { /* ignore */ }
       // 回滚 = 恢复官方状态。revert-all.ps1 默认保留模型记录，
       // 那会留下"补丁没了 + 代理没了，但自定义模型还在"的坏状态（选中发不出去）。
@@ -994,7 +994,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (url.pathname === '/api/revert-status') {
-      const logFile = 'E:\\Project\\AI\dsh\\_revert_all_log.txt';
+      const logFile = path.join(DIR, '..', '_revert_all_log.txt');
       let lines = [];
       try { lines = fs.readFileSync(logFile, 'utf8').split('\n').filter(Boolean); } catch { /* none */ }
       return send(200, { ok: true, lines, done: lines.some((l) => l.includes('REVERT-ALL DONE')) });
@@ -1004,7 +1004,8 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/apply' && req.method === 'POST') {
       const script = path.join(DIR, '..', 'apply-all.ps1');
       if (!fs.existsSync(script)) return send(500, { ok: false, error: 'apply-all.ps1 不存在' });
-      try { fs.unlinkSync('E:\\Project\\AI\\dsh\\_apply_all_log.txt'); } catch { /* ignore */ }
+      const applyLog = path.join(DIR, '..', '_apply_all_log.txt');
+      try { fs.unlinkSync(applyLog); } catch { /* ignore */ }
       // 必须等这个「启动器」powershell 跑完，提权进程才真的会被拉起来。
       // 以前用 spawn(detached + stdio:'ignore') 发完就 unref，结果提权命令
       // 根本没有执行 —— 界面上点「应用补丁」永远没反应，也不报错。
@@ -1018,7 +1019,7 @@ const server = http.createServer(async (req, res) => {
 
     if (url.pathname === '/api/apply-status') {
       let lines = [];
-      try { lines = fs.readFileSync('E:\\Project\\AI\\dsh\\_apply_all_log.txt', 'utf8').split('\n').filter(Boolean); } catch { /* none */ }
+      try { lines = fs.readFileSync(path.join(DIR, '..', '_apply_all_log.txt'), 'utf8').split('\n').filter(Boolean); } catch { /* none */ }
       return send(200, { ok: true, lines, done: lines.some((l) => l.includes('APPLY-ALL DONE')) });
     }
 
