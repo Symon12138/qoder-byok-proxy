@@ -1,0 +1,36 @@
+{
+  "upstream": {
+    "baseUrl": "http://127.0.0.1:3425/v1",
+    "apiKey": "REPLACE_WITH_UPSTREAM_API_KEY",
+    "model": "your-model-id",
+    "displayName": "Your Model Name",
+    "reasoningEffort": "high",
+    "maxTokens": 128000,
+    "contextLength": 1000000
+  },
+  "serveCustomModels": true,
+  "customSourceValues": ["custom", "byok"],
+  "injectTools": true,
+  "serveWiki": true,
+  "recordId": "model_mocktest",
+  "proxyPort": 8788,
+  "ideProxyPort": 8788,
+  "setupDone": false,
+  "activeProfile": "default",
+  "profiles": {
+    "default": {
+      "baseUrl": "http://127.0.0.1:3425/v1",
+      "apiKey": "REPLACE_WITH_UPSTREAM_API_KEY",
+      "model": "your-model-id",
+      "displayName": "Your Model Name",
+      "reasoningEffort": "high",
+      "maxTokens": 128000,
+      "contextLength": 1000000
+    }
+  },
+  "patches": {
+    "P12": true,
+    "experts": true,
+    "repowiki": true
+  }
+}

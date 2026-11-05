@@ -21,6 +21,15 @@ Qoder IDE ──http.proxy──> 127.0.0.1:8788 (本代理)
 
 ## 配置 `config.json`
 
+仓库里带了一份可直接复制的模板 `config.example.json`（字段与代码一一对应，值都是占位符）：
+
+```powershell
+Copy-Item qoder-proxy\config.example.json qoder-proxy\config.json
+# 然后把 apiKey / baseUrl / model / displayName 换成你自己的
+```
+
+> `config.json` 里是明文 API Key，**已被 .gitignore 排除**，不会进仓库；模板文件里只有占位符。
+
 ```json
 {
   "upstream": {
@@ -613,6 +622,7 @@ qoder-byok/
    ├─ admin.html             控制台外壳
    ├─ index.html             入口页
    ├─ config.json            运行时配置（含明文 apiKey → 不入库）
+   ├─ config.example.json    可复制的配置模板（全部字段 + 占位符，入库）
    ├─ ca.crt / ca.key        MITM 用的本地 CA（私钥不入库）
    ├─ leaf.crt / leaf.key    api3.qoder.sh 的签证书（私钥不入库）
    ├─ ext.cnf                leaf 证书的扩展配置
@@ -754,14 +764,14 @@ certutil -user -addstore Root "<项目路径>\qoder-proxy\ca.crt"
 
 ## 新环境部署（从 clone 到能用）
 
-克隆下来只有 67 个源码文件，下面这些必须由本机补齐 —— 前两项代理启动时**会自动处理**：
+克隆下来只有源码与文档（80 个文件），下面这些必须由本机补齐 —— 前两项代理启动时**会自动处理**：
 
 | # | 需要什么 | 谁负责 |
 |---|---|---|
 | 1 | `ca.key` / `leaf.key` / 两个证书 | **自动**：首次启动代理时用 openssl 现场生成（缺了会提示装 Git for Windows） |
 | 2 | `bodies/` 采样目录 | **自动**：启动时 `mkdir -p` |
 | 3 | CA 被系统信任 | **点一下**：控制台「维护 → 信任证书」→ Windows 弹窗点「是」（见上一节） |
-| 4 | `config.json`（上游地址 / API Key / 模型） | 手动：没有也能启动，控制台会走首次引导，填完即生效 |
+| 4 | `config.json`（上游地址 / API Key / 模型） | 手动：复制 `config.example.json` 改名后填 key；不填也能启动，控制台会走首次引导 |
 | 5 | Qoder IDE 本体 | 手动：装好即可，控制台会自动探测安装目录 |
 | 6 | 管理员权限 | 手动：仅在「应用补丁 / 回滚」时需要（改 bundle 与 checksum） |
 | 7 | `_qoder_byok_backup/` | 可选：只有 revert 的反向替换失效时才会拿它兜底 |
