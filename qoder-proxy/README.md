@@ -613,7 +613,6 @@ qoder-byok/
 ├─ mitm-test.js              不经 IDE 的端到端自测：构真实请求 → 隧道 → 解析 SSE
 ├─ start.ps1                 一键启动/停止/查状态；只起服务，不动 Qoder 配置（带 BOM 的 UTF-8）
 ├─ start.cmd                 双击入口，转调 start.ps1
-├─ QODER-BYOK-PATCH.md       早期"解锁 Qoder 自带 BYOK"方案的记录（已被取代）
 ├─ .gitignore                白名单式（先忽略全部，再逐个放行）
 └─ qoder-proxy/
    ├─ proxy.js               MITM 代理（8788）：解包 → 转发网关 → 包回 SSE 信封
@@ -623,8 +622,8 @@ qoder-byok/
    ├─ index.html             入口页
    ├─ config.json            运行时配置（含明文 apiKey → 不入库）
    ├─ config.example.json    可复制的配置模板（全部字段 + 占位符，入库）
-   ├─ ca.crt / ca.key        MITM 用的本地 CA（私钥不入库）
-   ├─ leaf.crt / leaf.key    api3.qoder.sh 的签证书（私钥不入库）
+   ├─ ca.crt / leaf.crt      MITM 证书，**首次启动代理时自动生成**（本机文件，不入库）
+   ├─ ca.key / leaf.key      对应私钥（绝不入库）
    ├─ ext.cnf                leaf 证书的扩展配置
    ├─ tools-extra.json       工具补全用的额外工具定义
    ├─ icon.svg / icon-192.png  站点图标
@@ -742,6 +741,8 @@ powershell -ExecutionPolicy Bypass -File start.ps1 -Open     # 启动并打开�
 
 **方式 B：命令行（与控制台等价）**
 
+`ca.crt` 是**首次启动代理时自动生成**的（不入库），所以这条命令要在代理至少启动过一次之后执行：
+
 ```powershell
 certutil -user -addstore Root "<项目路径>\qoder-proxy\ca.crt"
 ```
@@ -764,7 +765,7 @@ certutil -user -addstore Root "<项目路径>\qoder-proxy\ca.crt"
 
 ## 新环境部署（从 clone 到能用）
 
-克隆下来只有源码与文档（80 个文件），下面这些必须由本机补齐 —— 前两项代理启动时**会自动处理**：
+克隆下来只有源码与文档（70 个文件），下面这些必须由本机补齐 —— 前两项代理启动时**会自动处理**：
 
 | # | 需要什么 | 谁负责 |
 |---|---|---|

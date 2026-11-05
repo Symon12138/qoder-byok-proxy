@@ -2,6 +2,7 @@
 # 不再依赖绝对路径，整个目录可以整体搬动。
 # 仍用白名单写法：先忽略全部，再逐个放行需要入库的文件。
 /*
+!/README.md
 !/.gitignore
 !/experts-patch.js
 !/apply-all.ps1
@@ -30,7 +31,9 @@
 /qoder-proxy/config.json
 
 # 证书私钥：CA 私钥泄漏等于任何人都能伪造任意站点
+/qoder-proxy/ca.crt
 /qoder-proxy/ca.key
+/qoder-proxy/leaf.crt
 /qoder-proxy/leaf.key
 /qoder-proxy/*.srl
 /qoder-proxy/*.csr
