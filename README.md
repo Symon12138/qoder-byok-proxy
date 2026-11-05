@@ -56,8 +56,7 @@ qoder-byok-proxy/            ← clone 下来的目录名（本机这份叫 qode
    ├─ README.md              ★ 详细文档（配置字段、补丁清单、踩坑记录、排障）
    ├─ config.example.json    配置模板
    ├─ proxy.js / admin.js    代理与控制台后端
-   ├─ src/ styles/ fonts/    控制台前端
-   └─ _rt/                   回归与诊断工具（mitm-test / docaudit / finalcheck / cacheaudit / logaudit）
+   └─ src/ styles/ fonts/    控制台前端
 ```
 
 ## 三条必须知道的限制

@@ -35,11 +35,6 @@
 /qoder-proxy/*.srl
 /qoder-proxy/*.csr
 
-# 测试脚手架产物
-/qoder-proxy/_rt_out/
-/qoder-proxy/_fp_out/
-/qoder-proxy/_regress/
-
 # 临时脚本（下划线开头）与备份
 /qoder-proxy/_*.js
 /qoder-proxy/_*.txt

@@ -106,7 +106,7 @@ Copy-Item qoder-proxy\config.example.json qoder-proxy\config.json
 - `cosy-machineid` / `cosy-machinecode` / `cosy-machinetoken` / `cosy-user`：机器与用户标识
 - `cosy-clientip`：本机内网地址
 
-实测（用回显型假上游 `_rt/stub_headers.js`，它把收到的头当回复吐回来）：
+实测（用一个把收到的头原样作为回复吐回来的临时假上游）：
 上游收到 `user-agent: Go-http-client/1.1`、`x-qoder-client: Qoder-IDE`、
 `x-qoder-version: 1.38.0`、`x-qoder-proxy: byok`、`x-request-id: probe-...`。
 
@@ -149,14 +149,10 @@ Qoder 的 UA 是 `Go-http-client/1.1`，而 magpie 的 `libraries` 表把 `go-ht
 一次 wikify 文档生成会并行跑几十个页面，每页自带 `documentation_objective`，
 彼此之间本来就没有共同前缀。把这种东西和聊天混在一起算平均，得到的数字没有意义。
 
-### 一条命令定位
+### 怎么判断
 
-```bash
-node _rt/cacheaudit.js
-```
-
-它读 magpie 的用量（`~/.config/magpie/usage.jsonl`）和代理日志（`proxy.log`），
-按时间对齐后给每次调用贴上"请求形态"（工具集大小、消息条数），分别统计命中率，并给出结论：
+看 magpie 的用量文件 `~/.config/magpie/usage.jsonl`，**先按请求形态分组**（工具集大小、消息条数），
+再分别算命中率：
 
 - 常规对话 ≥85% → 前缀没被改写，正常
 - 常规对话 <85% → 才需要去看前缀
@@ -178,12 +174,7 @@ node _rt/cacheaudit.js
 
 ## 排查运行日志（哪些错误跟本项目有关）
 
-```bash
-node _rt/logaudit.js            # 最近 6 个会话
-node _rt/logaudit.js 12 --full  # 更多会话，并打印每类的原文样本
-```
-
-它扫 `%APPDATA%\Qoder\logs`，把 error/warning 归一化之后聚合成"类"，再按已知模式标注归属：
+直接看 `%APPDATA%\Qoder\logs\<会话目录>\` 下的 `renderer.log` / `main.log` / `sharedprocess.log`，按下面的判据归类：
 
 | 标注 | 含义 | 典型消息 |
 |---|---|---|
@@ -398,17 +389,6 @@ MITM 的几个域名里，只有自定义模型请求会被接管；其余请求
 
 实测效果：专家团一轮对话 `chunks=175 characters=947`，正常返回。
 
-## 代理自测（不需要 IDE）
-
-`E:\Project\AI\dsh\qoder-byok\qoder-proxy\_rt\mitm-test.js` —— 用 qoder 编码器构造真实请求，经 HTTP CONNECT 隧道打到本代理，
-直接验证「解码 → 提取 → 转发上游 → SSE 封包」整条链路：
-
-```powershell
-node qoder-proxy/_rt/mitm-test.js --text "只回复：OK"                      # 文本
-node qoder-proxy/_rt/mitm-test.js --text "这图什么颜色？" --image x.b64     # 多模态（纯 base64 文件）
-```
-
-实测（2026-10-30）：文本回复「OK」、纯红图回复「红色」、错误映射 5/5 通过。
 
 ## 图片与错误映射
 
@@ -638,12 +618,8 @@ qoder-byok/
    │  └─ views/              8 个视图：概览 / 上游 / 模型能力 / 补丁 / 日志 / 设置 / 维护 / 帮助
    ├─ styles/                设计令牌 → 布局 → 组件（tokens / layout / components / base）
    ├─ fonts/                 Fira Sans/Code 的 latin 子集（8 个 woff2 + fira.css，188 KB），不走外网
-   ├─ docs/
-   │  └─ 开发历程与问题记录.md   方向选择、问题台账、验证方法学（回看用）
-├─ _rt/                   回归脚手架：mitm-test（端到端）+ lib + p1~p4 + 文档一致性 + 界面冒烟
-│                          + cacheaudit（缓存命中率）+ logaudit（日志归类）+ stub_headers（回显假上游）
-│                          + stub_headers（回显假上游）
-   └─ _regress/              历史回归产物（截图/JSON，不入库）
+   └─ docs/
+      └─ 开发历程与问题记录.md   方向选择、问题台账、验证方法学（回看用）
 ```
 
 代码规模（按行）：`admin.js` 1177、`proxy.js` 905、`scripts/experts-patch.js` 191、
@@ -651,7 +627,7 @@ qoder-byok/
 
 **入库与不入库**：`.gitignore` 用白名单，只放行源码与文档。
 以下只在本地存在、不进版本库 —— `config.json`（明文 apiKey）、`ca.key` / `leaf.key`
-（CA 私钥泄漏等于任何人都能伪造任意站点）、`proxy.log*`、`bodies/`、`_regress/`、
+（CA 私钥泄漏等于任何人都能伪造任意站点）、`proxy.log*`、`bodies/`、
 `_qoder_byok_backup/`（约 2.9 GB 的原始 bundle 快照，`revert-all.ps1` 的兜底来源）。
 
 ## 目录无关性（可以整体搬动）
@@ -683,7 +659,7 @@ Select-String -Path *.ps1, *.js, qoder-proxy\*.js, qoder-proxy\*.ps1 -Pattern 'E
 代理     proxy listening on 127.0.0.1:8788 -> direct
 状态接口 补丁 4/4、代理在运行、安装目录 D:\Qoder IDE 正常识别
 文件落点 proxy.log 与 bodies/ 仍写在项目内，C:\ 根下无任何残留
-端到端   mitm-test 状态 200，custom-serve-end sawFinish=true
+端到端   发一条真实对话：状态 200，custom-serve-end sawFinish=true
 脚本     apply-all.ps1 / scripts/run-experts-patch.ps1 从 C:\ 调用可正确定位兄弟脚本
 ```
 
