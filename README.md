@@ -11,7 +11,7 @@
 |---|---|---|
 | **代理** | `qoder-proxy/proxy.js` → `127.0.0.1:8788` | 用本地 CA 接管 Qoder 发往 `api3.qoder.sh` 的聊天请求，解码后改写成 OpenAI 格式转发到你配的上游；非自定义请求原样隧道回官方 |
 | **控制台** | `qoder-proxy/admin.js` → `http://127.0.0.1:3426` | 网页界面：配上游、切模型、开关补丁、看请求日志、信任证书 |
-| **补丁** | `experts-patch.js` + `patch-qoder-*.ps1` | 8 条针对 bundle 的定点修改，解除随版本变化的门控，让自定义模型出现在模型选择器里 |
+| **补丁** | `scripts/experts-patch.js` + `scripts/patch-qoder-*.ps1` | 8 条针对 bundle 的定点修改，解除随版本变化的门控，让自定义模型出现在模型选择器里 |
 
 请求链路：
 
@@ -42,19 +42,22 @@ Copy-Item qoder-proxy\config.example.json qoder-proxy\config.json
 ## 目录
 
 ```
-qoder-byok/
-├─ start.cmd / start.ps1     一键启动/停止/查状态
-├─ apply-all.ps1             提权打补丁（7 步流水线）
+qoder-byok-proxy/            ← clone 下来的目录名（本机这份叫 qoder-byok/）
+├─ start.cmd / start.ps1     一键启动/停止/查状态 ← 日常只需要双击这个
+├─ apply-all.ps1             提权打补丁（7 步流水线，内部调用 scripts/）
 ├─ revert-all.ps1            提权回滚到官方状态
-├─ experts-patch.js          8 条 bundle 补丁
-├─ patch-qoder-*.ps1         老一代补丁（byok/url/merge/live）
-├─ mitm-test.js              不经 IDE 的端到端自测
+├─ scripts/                  补丁与模型同步脚本（不直接运行，由 apply-all / 控制台调用）
+│  ├─ experts-patch.js       8 条 bundle 补丁
+│  ├─ run-experts-patch.ps1  apply-all 的中间层：找 node、读配置
+│  ├─ patch-qoder-*.ps1      老一代补丁（byok / url / merge / live）+ 收尾修正
+│  ├─ fix-qoder-checksums.ps1  修 product.json / featureFlags.json 的校验和
+│  └─ sync-qoder-model.ps1   把模型能力写进 Qoder 的 sqlite 模型记录
 └─ qoder-proxy/              代理 + 控制台 + 文档
    ├─ README.md              ★ 详细文档（配置字段、补丁清单、踩坑记录、排障）
    ├─ config.example.json    配置模板
    ├─ proxy.js / admin.js    代理与控制台后端
    ├─ src/ styles/ fonts/    控制台前端
-   └─ _rt/                   回归与诊断工具（docaudit / finalcheck / cacheaudit / logaudit）
+   └─ _rt/                   回归与诊断工具（mitm-test / docaudit / finalcheck / cacheaudit / logaudit）
 ```
 
 ## 三条必须知道的限制
@@ -66,7 +69,7 @@ qoder-byok/
 ## 已验证环境
 
 Qoder IDE `1.106.3`（Windows 11）+ Node 24。补丁锚点做过抗变量重命名的加固，
-换版本后先用 `node experts-patch.js --dry --root "<原始 bundle 所在目录>"` 确认 8 条都还是「待应用」。
+换版本后先用 `node scripts/experts-patch.js --dry --root "<原始 bundle 所在目录>"` 确认 8 条都还是「待应用」。
 
 ## 详细文档
 

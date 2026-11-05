@@ -204,7 +204,7 @@ node _rt/logaudit.js 12 --full  # 更多会话，并打印每类的原文样本
 用脚本按当前 `config.upstream.model` 自动写回 Qoder 的模型记录：
 
 ```powershell
-pwsh -File E:\Project\AI\dsh\qoder-byok\sync-qoder-model.ps1
+pwsh -File E:\Project\AI\dsh\qoder-byok\scripts\sync-qoder-model.ps1
 ```
 
 会更新显示名、上下文窗口、`is_vl`（是否支持图片）、`thinkingConfig`（等级选项）。改完重启 IDE 生效。
@@ -319,7 +319,7 @@ node E:\Project\AI\dsh\qoder-byok\qoder-proxy\admin.js
 上下文长度可在「上游配置」里手动覆盖。
 
 **切换模型做的事**：写 `config.json`（模型、显示名、`maxTokens`=模型输出上限、`reasoningEffort`=当前值或模型支持的第一个档位）
-+ 跑 `sync-qoder-model.ps1`（上下文长度、图片、思考能力、档位写入模型记录）。IDE 里显示名 3 秒内自动更新。
++ 跑 `scripts/sync-qoder-model.ps1`（上下文长度、图片、思考能力、档位写入模型记录）。IDE 里显示名 3 秒内自动更新。
 
 ### 补丁开关：按功能，不按编号
 
@@ -400,12 +400,12 @@ MITM 的几个域名里，只有自定义模型请求会被接管；其余请求
 
 ## 代理自测（不需要 IDE）
 
-`E:\Project\AI\dsh\qoder-byok\mitm-test.js` —— 用 qoder 编码器构造真实请求，经 HTTP CONNECT 隧道打到本代理，
+`E:\Project\AI\dsh\qoder-byok\qoder-proxy\_rt\mitm-test.js` —— 用 qoder 编码器构造真实请求，经 HTTP CONNECT 隧道打到本代理，
 直接验证「解码 → 提取 → 转发上游 → SSE 封包」整条链路：
 
 ```powershell
-node mitm-test.js --text "只回复：OK"                      # 文本
-node mitm-test.js --text "这图什么颜色？" --image x.b64     # 多模态（纯 base64 文件）
+node qoder-proxy/_rt/mitm-test.js --text "只回复：OK"                      # 文本
+node qoder-proxy/_rt/mitm-test.js --text "这图什么颜色？" --image x.b64     # 多模态（纯 base64 文件）
 ```
 
 实测（2026-10-30）：文本回复「OK」、纯红图回复「红色」、错误映射 5/5 通过。
@@ -429,7 +429,7 @@ RepoWiki 的生成在 **Go 语言服务（`Qoder.exe`）** 里跑本地 agent，
 
 要让 wiki 用自定义模型需要三件事：
 
-1. **P12（`experts-patch.js`）**：把 `fge.shouldShowCommercialMessage` 改成恒 `false`，
+1. **P12（`scripts/experts-patch.js`）**：把 `fge.shouldShowCommercialMessage` 改成恒 `false`，
    去掉「你当前的版本无法生成 Repo Wiki + 升级订阅计划」的拦截，生成按钮才会正常渲染。
    （按钮不会被禁用，配额为 0 时只是文案变成「生成」并请求 Credits）
 2. **代理识别 wiki 任务**：`forward()` 里对 `session_type:"wiki"` 强制走 custom 路径
@@ -509,11 +509,11 @@ Get-Item 'D:\Qoder IDE\resources\app\out\vs\workbench\workbench.desktop.main.js'
 **修复**：补丁脚本幂等，重跑即可（会关闭 Qoder，跑完手动重开）：
 
 ```powershell
-node E:\Project\AI\dsh\qoder-byok\experts-patch.js --dry   # 先看哪些待应用（0 处 = 已应用）
-node E:\Project\AI\dsh\qoder-byok\experts-patch.js          # 需要管理员权限
+node E:\Project\AI\dsh\qoder-byok\scripts\experts-patch.js --dry   # 先看哪些待应用（0 处 = 已应用）
+node E:\Project\AI\dsh\qoder-byok\scripts\experts-patch.js          # 需要管理员权限
 ```
 
-之后必须重跑 `fix-qoder-checksums.ps1`（`apply-all.ps1` 会自动做）。
+之后必须重跑 `scripts/fix-qoder-checksums.ps1`（`apply-all.ps1` 会自动做）。
 
 > **注意**：不要指望「关掉自动更新」来避免——实测 Qoder 每次启动都会把它重置为 `true`
 > （见「自动更新（Qoder 会强制重置，注意）」）。真正的防线是**发现症状后重打补丁**。
@@ -586,10 +586,9 @@ SwitchMode, CreatePlan, createGoal, updateGoal, getGoal, CallMcpTool, Glob, Read
 | P4 BYOK 门控 | `HY` | `jY` |
 
 ```powershell
-# 都需要管理员
-powershell -ExecutionPolicy Bypass -File E:\Project\AI\dsh\qoder-byok\patch-qoder-experts-refresh.ps1
-node E:\Project\AI\dsh\qoder-byok\patch-wb-experts.js     # 主 bundle 的 P1/P4/P5
-node E:\Project\AI\dsh\qoder-byok\patch-wb-p5b.js         # 主 bundle 的 P5b（3 处）
+# 需要管理员
+node scripts\experts-patch.js           # 8 条全打（幂等，已应用的会跳过）
+node scripts\experts-patch.js --dry     # 只看哪些待应用
 ```
 
 实测：专家团下拉出现 `deepseek-v4.1-flash`，选中后 `chat.modelConfig.experts = custom:model_mocktest` 落库。
@@ -599,20 +598,19 @@ node E:\Project\AI\dsh\qoder-byok\patch-wb-p5b.js         # 主 bundle 的 P5b�
 
 ```
 qoder-byok/
-├─ experts-patch.js          8 条 bundle 补丁，每条独立可关；备份自动轮转
-├─ apply-all.ps1             提权应用：8 步流水线，先校验两个 bundle 再逐条打
+├─ start.ps1 / start.cmd     一键启动/停止/查状态（唯一需要手动运行的入口）
+├─ apply-all.ps1             提权应用：7 步流水线，先校验两个 bundle 再逐条打
 ├─ revert-all.ps1            提权回滚：反向替换，不依赖备份文件
-├─ fix-qoder-checksums.ps1   修 product.json / featureFlags.json 的校验和
-├─ sync-qoder-model.ps1      把网关模型能力写进 Qoder 的 sqlite 模型记录
-├─ run-experts-patch.ps1     apply-all 的中间层：找 node、读配置
-├─ patch-qoder-byok.ps1      老一代补丁：解除 remote-enable 门控（byok 标记就靠它）
-├─ patch-qoder-url.ps1       老一代补丁：把 baseurl 指向本地代理
-├─ patch-qoder-merge.ps1     老一代补丁：合并模型记录字段
-├─ patch-qoder-live-model.ps1 老一代补丁：实时模型名（live 标记）
-├─ fix-qoder-live-patch.ps1  上面那条的收尾修正；apply-all 第 5 步会调它
-├─ mitm-test.js              不经 IDE 的端到端自测：构真实请求 → 隧道 → 解析 SSE
-├─ start.ps1                 一键启动/停止/查状态；只起服务，不动 Qoder 配置（带 BOM 的 UTF-8）
-├─ start.cmd                 双击入口，转调 start.ps1
+├─ scripts/                  补丁与模型同步脚本（由 apply-all / 控制台调用，不直接运行）
+│  ├─ experts-patch.js       8 条 bundle 补丁，每条独立可关；备份自动轮转
+│  ├─ run-experts-patch.ps1  apply-all 的中间层：找 node、读配置
+│  ├─ patch-qoder-byok.ps1   老一代补丁：解除 remote-enable 门控（byok 标记就靠它）
+│  ├─ patch-qoder-url.ps1    老一代补丁：把 baseurl 指向本地代理
+│  ├─ patch-qoder-merge.ps1  老一代补丁：合并模型记录字段
+│  ├─ patch-qoder-live-model.ps1 老一代补丁：实时模型名（live 标记）
+│  ├─ fix-qoder-live-patch.ps1   上面那条的收尾修正；apply-all 第 5 步会调它
+│  ├─ fix-qoder-checksums.ps1    修 product.json / featureFlags.json 的校验和
+│  └─ sync-qoder-model.ps1   把网关模型能力写进 Qoder 的 sqlite 模型记录
 ├─ .gitignore                白名单式（先忽略全部，再逐个放行）
 └─ qoder-proxy/
    ├─ proxy.js               MITM 代理（8788）：解包 → 转发网关 → 包回 SSE 信封
@@ -642,13 +640,13 @@ qoder-byok/
    ├─ fonts/                 Fira Sans/Code 的 latin 子集（8 个 woff2 + fira.css，188 KB），不走外网
    ├─ docs/
    │  └─ 开发历程与问题记录.md   方向选择、问题台账、验证方法学（回看用）
-   ├─ _rt/                   回归脚手架：lib + p1~p4 + 多上游 + 文档一致性 + 界面冒烟
-│                          + cacheaudit（缓存命中率诊断）+ logaudit（运行日志归类）
+├─ _rt/                   回归脚手架：mitm-test（端到端）+ lib + p1~p4 + 文档一致性 + 界面冒烟
+│                          + cacheaudit（缓存命中率）+ logaudit（日志归类）+ stub_headers（回显假上游）
 │                          + stub_headers（回显假上游）
    └─ _regress/              历史回归产物（截图/JSON，不入库）
 ```
 
-代码规模（按行）：`admin.js` 1177、`proxy.js` 905、`experts-patch.js` 191、
+代码规模（按行）：`admin.js` 1177、`proxy.js` 905、`scripts/experts-patch.js` 191、
 `src/` 9 个文件 3771、`styles/` 4 个文件 1562。
 
 **入库与不入库**：`.gitignore` 用白名单，只放行源码与文档。
@@ -686,7 +684,7 @@ Select-String -Path *.ps1, *.js, qoder-proxy\*.js, qoder-proxy\*.ps1 -Pattern 'E
 状态接口 补丁 4/4、代理在运行、安装目录 D:\Qoder IDE 正常识别
 文件落点 proxy.log 与 bodies/ 仍写在项目内，C:\ 根下无任何残留
 端到端   mitm-test 状态 200，custom-serve-end sawFinish=true
-脚本     apply-all.ps1 / run-experts-patch.ps1 从 C:\ 调用可正确定位兄弟脚本
+脚本     apply-all.ps1 / scripts/run-experts-patch.ps1 从 C:\ 调用可正确定位兄弟脚本
 ```
 
 `config.json` 里唯一带盘符的字段是 `ideRoot`（**被改的 Qoder 装在哪**，不是本项目在哪）。
@@ -795,7 +793,7 @@ certutil -user -addstore Root "<项目路径>\qoder-proxy\ca.crt"
 就不会真的下载更新，补丁也不会被冲掉。真正需要担心的是 **Qoder 发布了新版本**——那时它会更新
 并覆盖补丁，症状是：模型名不对 / 专家团选不到自定义模型 / RepoWiki 又提示「无法生成」。
 
-**发现被冲掉后怎么办**：在「高级 · 维护」点**应用全部补丁**，或跑 `experts-patch.js --quest`，然后重启 Qoder。
+**发现被冲掉后怎么办**：在「高级 · 维护」点**应用全部补丁**，或跑 `scripts/experts-patch.js --quest`，然后重启 Qoder。
 详见「⚠️ Qoder 更新会冲掉全部补丁（必读）」。
 
 相关文件：
@@ -804,7 +802,7 @@ certutil -user -addstore Root "<项目路径>\qoder-proxy\ca.crt"
 - `%APPDATA%\Qoder\User\app.json` → `config.advanced.autoUpdate`
 - 备份文件：`*.bak-noautoupdate`
 
-## 补丁清单（experts-patch.js）
+## 补丁清单（scripts/experts-patch.js）
 
 移植自 [wqzhellohhwy/qoder-experts-enable](https://github.com/wqzhellohhwy/qoder-experts-enable)，
 并针对本版本做了重构与扩展。**8 条，每条独立生效、互不依赖**（早期的 P8/P10/P11 是对其他补丁产物的
@@ -822,16 +820,16 @@ certutil -user -addstore Root "<项目路径>\qoder-proxy\ca.crt"
 用法：
 
 ```powershell
-node E:\Project\AI\dsh\qoder-byok\experts-patch.js --dry              # 只看哪些待应用（0 处 = 已应用）
-node E:\Project\AI\dsh\qoder-byok\experts-patch.js                    # 应用
-node E:\Project\AI\dsh\qoder-byok\experts-patch.js --only=P1,P4       # 只应用指定几条
-node E:\Project\AI\dsh\qoder-byok\experts-patch.js --skip=P12         # 跳过指定几条
+node E:\Project\AI\dsh\qoder-byok\scripts\experts-patch.js --dry              # 只看哪些待应用（0 处 = 已应用）
+node E:\Project\AI\dsh\qoder-byok\scripts\experts-patch.js                    # 应用
+node E:\Project\AI\dsh\qoder-byok\scripts\experts-patch.js --only=P1,P4       # 只应用指定几条
+node E:\Project\AI\dsh\qoder-byok\scripts\experts-patch.js --skip=P12         # 跳过指定几条
 
 \`--quest\` 是历史开关，现在无任何作用（自定义模型改由 Qoder 原生「自定义」分组承载，
 已经没有按场景注入的补丁了），传了也不会报错。
 ```
 
-之后必须重跑 `fix-qoder-checksums.ps1`（`apply-all.ps1` 会自动做）。
+之后必须重跑 `scripts/fix-qoder-checksums.ps1`（`apply-all.ps1` 会自动做）。
 
 备份文件是 `<bundle>.bak-experts-<时间戳>`，每个 bundle 只保留最近 1 份 ——
 早期没有轮转，13 次应用堆了 1.4 GB。回滚并不依赖这些备份（revert 是反向替换补丁），
@@ -862,7 +860,7 @@ Qoder 每次构建都会重新分配压缩变量名，**同一个逻辑位置，
 若某条是"0 处 未找到/已应用"，而它确实还没打过，就是锚点失效了。
 
 ```bash
-node experts-patch.js --dry --root <放有原始 bundle 的临时目录>
+node scripts/experts-patch.js --dry --root <放有原始 bundle 的临时目录>
 ```
 
 ### 关键坑（实测）

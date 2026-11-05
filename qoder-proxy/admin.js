@@ -449,7 +449,7 @@ function clearByok() {
 }
 
 function syncRecord() {
-  const r = spawnSync('pwsh', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(DIR, '..', 'sync-qoder-model.ps1')], { encoding: 'utf8', timeout: 60000 });
+  const r = spawnSync('pwsh', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(DIR, '..', 'scripts', 'sync-qoder-model.ps1')], { encoding: 'utf8', timeout: 60000 });
   // Manual context-length override: the gateway does not always report max_input_tokens,
   // and the record is the only place Qoder reads it from.
   const cfg = loadConfig();

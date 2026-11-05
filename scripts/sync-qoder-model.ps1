@@ -1,10 +1,10 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 # Sync the Qoder custom-model record with the upstream gateway metadata.
 # Reads qoder-proxy/config.json (upstream.baseUrl / apiKey / model), queries
 # /v1/models, and rewrites aicoding.customModels so the IDE shows the right
 # display name, context window, vision flag and reasoning levels.
 param(
-  [string]$ProxyDir = (Join-Path $PSScriptRoot 'qoder-proxy'),
+  [string]$ProxyDir = (Join-Path $PSScriptRoot '..\qoder-proxy'),
   [string]$Id = 'model_mocktest'
 )
 

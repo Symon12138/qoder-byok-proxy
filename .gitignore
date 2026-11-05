@@ -1,27 +1,24 @@
 # 本项目是独立目录（qoder-byok/），所有脚本用 $PSScriptRoot / __dirname 定位，
-# 不再依赖绝对路径，整个目录可以整体搬动。
-# 仍用白名单写法：先忽略全部，再逐个放行需要入库的文件。
+# 不依赖绝对路径，整个目录可以整体搬动。
+# 白名单写法：先忽略根目录全部，再逐个放行需要入库的入口与目录。
 /*
+
+# ── 根目录入口（用户直接接触的只有这些）──
 !/README.md
 !/.gitignore
-!/experts-patch.js
-!/apply-all.ps1
-!/revert-all.ps1
-!/run-experts-patch.ps1
-!/fix-qoder-checksums.ps1
-!/sync-qoder-model.ps1
-!/mitm-test.js
-!/patch-qoder-byok.ps1
-!/patch-qoder-url.ps1
-!/patch-qoder-merge.ps1
-!/patch-qoder-live-model.ps1
-!/fix-qoder-live-patch.ps1
-!/QODER-BYOK-PATCH.md
 !/start.ps1
 !/start.cmd
+!/apply-all.ps1
+!/revert-all.ps1
+
+# ── 目录 ──
+!/scripts/
 !/qoder-proxy/
 
-# ---- qoder-proxy 内部再排除 ----
+# ── scripts/ 里只保留脚本，运行日志不入库 ──
+/scripts/_*.txt
+
+# ── qoder-proxy 内部排除 ──
 # 运行时数据（会一直增长）
 /qoder-proxy/bodies/
 /qoder-proxy/proxy.log
@@ -30,7 +27,7 @@
 # 含明文 apiKey，绝不入库
 /qoder-proxy/config.json
 
-# 证书私钥：CA 私钥泄漏等于任何人都能伪造任意站点
+# 证书：运行时代生成。私钥泄漏等于任何人都能伪造任意站点，证书本身对本机以外也无意义
 /qoder-proxy/ca.crt
 /qoder-proxy/ca.key
 /qoder-proxy/leaf.crt
@@ -38,7 +35,7 @@
 /qoder-proxy/*.srl
 /qoder-proxy/*.csr
 
-# 测试脚手架与产物
+# 测试脚手架产物
 /qoder-proxy/_rt_out/
 /qoder-proxy/_fp_out/
 /qoder-proxy/_regress/
@@ -50,10 +47,12 @@
 /qoder-proxy/*.bak
 /qoder-proxy/*.bak-*
 
-# 应用补丁时的 bundle 原始备份（约 2.9 GB，只在本机保留）
+# ── 本机运行物 ──
+# 应用补丁时的 bundle 原始备份（只在本机保留）
 /_qoder_byok_backup/
+# start.ps1 拉起的服务日志
+/_start_logs/
 
 # 运行日志
 /_apply_all_log.txt
 /_revert_all_log.txt
-/_checksum_log.txt

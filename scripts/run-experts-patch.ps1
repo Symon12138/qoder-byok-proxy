@@ -6,7 +6,7 @@ param([string]$Root = '')
 $ErrorActionPreference = 'Stop'
 
 if (-not $Root) {
-    $cfg = Join-Path $PSScriptRoot 'qoder-proxy\config.json'
+    $cfg = Join-Path $PSScriptRoot '..\qoder-proxy\config.json'
     if (Test-Path -LiteralPath $cfg) {
         try { $Root = (Get-Content -LiteralPath $cfg -Raw | ConvertFrom-Json).ideRoot } catch { }
     }

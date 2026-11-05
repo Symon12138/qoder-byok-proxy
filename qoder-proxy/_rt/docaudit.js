@@ -14,7 +14,7 @@ const faqJs = read(path.join(PX, 'src', 'views', 'FAQ.js'));
 const journal = read(path.join(PX, 'docs', '开发历程与问题记录.md'));
 const admin = read(path.join(PX, 'admin.js'));
 const proxy = read(path.join(PX, 'proxy.js'));
-const patch = read(path.join(ROOT, 'experts-patch.js'));
+const patch = read(path.join(ROOT, 'scripts', 'experts-patch.js'));
 const mainJs = read(path.join(PX, 'src', 'main.js'));
 
 let pass = 0;
@@ -74,8 +74,8 @@ check('startPolling(5000) 存在', true, /startPolling\(5000\)/.test(mainJs));
 console.log('\n=== 10. 文档引用的路径 ===');
 const paths = [
   'qoder-proxy/README.md', 'qoder-proxy/proxy.js', 'qoder-proxy/admin.js',
-  'qoder-proxy/docs/开发历程与问题记录.md', 'experts-patch.js', 'apply-all.ps1',
-  'revert-all.ps1', 'fix-qoder-checksums.ps1', 'sync-qoder-model.ps1',
+  'qoder-proxy/docs/开发历程与问题记录.md', 'scripts/experts-patch.js', 'apply-all.ps1',
+  'revert-all.ps1', 'scripts/fix-qoder-checksums.ps1', 'scripts/sync-qoder-model.ps1',
   'qoder-proxy/_rt/lib.js', 'qoder-proxy/src/views/FAQ.js', 'qoder-proxy/styles/components.css',
 ];
 check('全部存在', [], paths.filter((p) => !fs.existsSync(path.join(ROOT, p))));

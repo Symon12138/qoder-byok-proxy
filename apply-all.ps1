@@ -53,7 +53,7 @@ $steps = @(
 
 $results = @()
 foreach ($s in $steps) {
-  $p = Join-Path $dir $s.File
+  $p = Join-Path (Join-Path $dir 'scripts') $s.File
   if (-not (Test-Path $p)) { Log "SKIP $($s.Name): $($s.File) missing"; $results += "$($s.Name)=MISSING"; continue }
   try {
     # Pass -Root through: every child script defaults to a hardcoded install path,

@@ -10,7 +10,7 @@
 #>
 param(
   [string]$Root = 'D:\Qoder IDE',
-  [string]$BackupRoot = (Join-Path $PSScriptRoot '_qoder_byok_backup')
+  [string]$BackupRoot = (Join-Path $PSScriptRoot '..\_qoder_byok_backup')
 )
 
 $ErrorActionPreference = 'Stop'

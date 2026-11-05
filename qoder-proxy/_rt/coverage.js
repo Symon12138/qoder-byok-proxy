@@ -16,7 +16,7 @@ const files = execFileSync('git', ['-c', 'core.quotePath=false', 'ls-files'], { 
   .split('\n').map((s) => s.trim()).filter(Boolean);
 
 // 只关心"读者需要知道它存在"的文件：源码、脚本、文档；忽略字体/图标这类资源
-const ignore = /(^qoder-proxy\/fonts\/|icon-|\.woff2$|^\.gitignore$|^qoder-proxy\/README\.md$)/;
+const ignore = /(^qoder-proxy\/fonts\/|icon-|\.woff2$|^\.gitignore$|^README\.md$|^qoder-proxy\/README\.md$)/;
 
 const missing = [];
 const byDir = {};
