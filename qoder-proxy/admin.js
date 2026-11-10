@@ -175,8 +175,9 @@ const DB = path.join(process.env.APPDATA || '', 'Qoder', 'User', 'globalStorage'
 // 整个写记录动作静默不生效 —— 表现是"同步了但 Qoder 里没变化"。
 const sqlLit = (v) => String(v).replace(/'/g, "''");
 
-const SQLITE = fs.existsSync('C:\\Users\\Administrator\\scoop\\shims\\sqlite3.exe')
-  ? 'C:\\Users\\Administrator\\scoop\\shims\\sqlite3.exe' : 'sqlite3';
+// sqlite3 交给 PATH 解析：写成绝对路径会让别人机器上直接找不到。
+// 找不到时 spawnSync 会返回 stderr，控制台照常报错，不会静默失败下面那句 SQL。
+const SQLITE = process.env.SQLITE3 || 'sqlite3';
 
 function readJSON(p, def) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return def; } }
 

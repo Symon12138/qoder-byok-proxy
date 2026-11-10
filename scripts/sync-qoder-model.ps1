@@ -82,7 +82,10 @@ $json = '[' + ($record | ConvertTo-Json -Depth 8 -Compress) + ']'
 $esc = $json.Replace("'", "''")
 $db = Join-Path $env:APPDATA 'Qoder\User\globalStorage\state.vscdb'
 $sqlite = (Get-Command sqlite3 -ErrorAction SilentlyContinue).Source
-if (-not $sqlite) { $sqlite = 'C:\Users\Administrator\scoop\shims\sqlite3.exe' }
+if (-not $sqlite) {
+  # 不要写死绝对路径：别人的机器上没有那个用户目录，会直接失败在这行
+  throw 'sqlite3 not found on PATH. Install it (scoop install sqlite / winget install SQLite.SQLite) and retry.'
+}
 "UPDATE ItemTable SET value = CAST('$esc' AS TEXT) WHERE key='aicoding.customModels';" | & $sqlite $db
 
 Write-Output "record updated:"
